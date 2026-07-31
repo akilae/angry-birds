@@ -1,15 +1,16 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>憤怒鳥：單人極限挑戰版 (Engine Standard)</title>
+  <title>憤怒鳥：單人極限挑戰版 (Mobile Touch Optimized)</title>
   <style>
     * { 
       box-sizing: border-box; 
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
+      touch-action: none;
     }
     body { 
       margin: 0; 
@@ -25,7 +26,7 @@
     }
     h1 { 
       margin: 0 0 8px 0; 
-      font-size: 22px; 
+      font-size: 20px; 
       color: #333; 
       text-align: center;
     }
@@ -45,10 +46,10 @@
     .ai-color { color: #2ecc71; }
     #turn-banner { 
       margin: 8px 0; 
-      font-size: 15px; 
+      font-size: 14px; 
       font-weight: bold; 
       background: #fff;
-      padding: 4px 14px; 
+      padding: 6px 14px; 
       border-radius: 20px; 
       border: 2px solid #333;
       text-align: center;
@@ -80,20 +81,16 @@
     <div class="ai-color">綠豬王 (AI) HP：<span id="ai-hp">300</span></div>
   </div>
 
-  <div id="turn-banner">當前發射：<span id="current-turn" class="p1-color">玩家回合 (請拖曳發射)</span></div>
+  <div id="turn-banner">當前發射：<span id="current-turn" class="p1-color">玩家回合 (按住紅鳥拖曳發射)</span></div>
   
   <div id="canvas-container">
     <canvas id="gameCanvas" width="800" height="400"></canvas>
   </div>
 
   <script>
-    // ==========================================
-    // 1. 系統組態與數學引擎 (Math & Config)
-    // ==========================================
     const GameState = { AIMING: 'AIMING', FLYING: 'FLYING', RESETTING: 'RESETTING', GAMEOVER: 'GAMEOVER' };
-    const CONFIG = { gravity: 0.25, maxDrag: 80, launchPower: 0.15, groundY: 320, fixedDelta: 1 / 60 };
+    const CONFIG = { gravity: 0.25, maxDrag: 90, launchPower: 0.16, groundY: 320, fixedDelta: 1 / 60 };
 
-    // 連續碰撞檢測 (Ray-AABB Slab Test)
     function checkRayAABB(p1, p2, box) {
       const minX = box.x - p1.radius, maxX = box.x + box.w + p1.radius;
       const minY = box.y - p1.radius, maxY = box.y + box.h + p1.radius;
@@ -119,9 +116,6 @@
       return true;
     }
 
-    // ==========================================
-    // 2. 實體與視覺特效系統 (Entities & VFX)
-    // ==========================================
     class Particle {
       constructor(x, y, color) {
         this.x = x; this.y = y; this.radius = Math.random() * 4 + 2; this.color = color;
@@ -137,20 +131,18 @@
       }
     }
 
-    // ==========================================
-    // 3. 核心遊戲引擎 (Game Loop & State Machine)
-    // ==========================================
     class GameEngine {
       constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
         this.state = GameState.AIMING;
-        this.turn = 1; // 1: 玩家, 2: AI
+        this.turn = 1;
         this.aiTurnCount = 0;
+        this.pulseTime = 0;
 
-        this.p1 = { x: 100, y: CONFIG.groundY - 40, hp: 300, radius: 18, color: '#e74c3c' };
+        this.p1 = { x: 100, y: CONFIG.groundY - 40, hp: 300, radius: 20, color: '#e74c3c' };
         this.ai = { x: 700, y: CONFIG.groundY - 40, hp: 300, radius: 22, color: '#2ecc71' };
-        this.bird = { x: this.p1.x, y: this.p1.y, vx: 0, vy: 0, radius: 15, flightFrames: 0 };
+        this.bird = { x: this.p1.x, y: this.p1.y, vx: 0, vy: 0, radius: 16, flightFrames: 0 };
         this.dragPos = { x: this.p1.x, y: this.p1.y };
 
         this.lastTime = performance.now();
@@ -199,8 +191,15 @@
         const rect = this.canvas.getBoundingClientRect();
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        let clientX = e.clientX;
+        let clientY = e.clientY;
+        if (e.touches && e.touches.length > 0) {
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+        } else if (e.changedTouches && e.changedTouches.length > 0) {
+          clientX = e.changedTouches[0].clientX;
+          clientY = e.changedTouches[0].clientY;
+        }
         return {
           x: (clientX - rect.left) * scaleX,
           y: (clientY - rect.top) * scaleY
@@ -208,14 +207,23 @@
       }
 
       initInput() {
-        const startDrag = (pos) => {
+        const onStart = (e) => {
           if (this.state !== GameState.AIMING || this.turn !== 1) return;
+          const pos = this.getCanvasPos(e);
           const anchor = this.activeAnchor;
-          if (Math.hypot(pos.x - anchor.x, pos.y - anchor.y) < 50) this.isDragging = true;
+          // 大幅放寬手機觸控判定範圍至 90px
+          if (Math.hypot(pos.x - anchor.x, pos.y - anchor.y) < 90) {
+            this.isDragging = true;
+            this.dragPos.x = pos.x;
+            this.dragPos.y = pos.y;
+            if (e.cancelable) e.preventDefault();
+          }
         };
 
-        const moveDrag = (pos) => {
+        const onMove = (e) => {
           if (!this.isDragging || this.turn !== 1) return;
+          if (e.cancelable) e.preventDefault();
+          const pos = this.getCanvasPos(e);
           const anchor = this.activeAnchor, dx = pos.x - anchor.x, dy = pos.y - anchor.y, dist = Math.hypot(dx, dy);
           if (dist > CONFIG.maxDrag) {
             const angle = Math.atan2(dy, dx);
@@ -226,9 +234,11 @@
           }
         };
 
-        const endDrag = () => {
+        const onEnd = (e) => {
           if (!this.isDragging || this.turn !== 1) return;
-          this.isDragging = false; this.state = GameState.FLYING;
+          if (e.cancelable) e.preventDefault();
+          this.isDragging = false; 
+          this.state = GameState.FLYING;
           const anchor = this.activeAnchor;
           this.bird.x = this.dragPos.x; this.bird.y = this.dragPos.y;
           this.bird.vx = (anchor.x - this.dragPos.x) * CONFIG.launchPower;
@@ -237,9 +247,13 @@
           this.playSound('launch');
         };
 
-        this.canvas.addEventListener('pointerdown', e => startDrag(this.getCanvasPos(e)));
-        window.addEventListener('pointermove', e => moveDrag(this.getCanvasPos(e)));
-        window.addEventListener('pointerup', endDrag);
+        this.canvas.addEventListener('pointerdown', onStart);
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+
+        this.canvas.addEventListener('touchstart', onStart, { passive: false });
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('touchend', onEnd, { passive: false });
       }
 
       executeAITurn() {
@@ -321,7 +335,7 @@
         setTimeout(() => {
           if (this.p1.hp <= 0 || this.ai.hp <= 0) {
             let winnerMsg = (this.p1.hp <= 0 && this.ai.hp <= 0) 
-              ? (this.turn === 1 ? '💀 自殺失敗！你失誤砸死自己了，綠豬王獲勝！' : '🎉 綠豬王失誤砸死自己，恭喜你獲勝！')
+              ? (this.turn === 1 ? '💀 自殺失敗！你砸死自己了，綠豬王獲勝！' : '🎉 綠豬王失誤砸死自己，恭喜獲勝！')
               : (this.p1.hp <= 0 ? '💀 綠豬王獲勝，挑戰失敗！' : '🎉 恭喜你擊敗綠豬王，獲得勝利！');
             alert(winnerMsg); this.state = GameState.GAMEOVER; this.resetGame();
           } else {
@@ -338,7 +352,7 @@
 
         const turnEl = document.getElementById('current-turn');
         if (this.turn === 1) {
-          turnEl.textContent = '玩家回合 (請拖曳發射)'; turnEl.className = 'p1-color';
+          turnEl.textContent = '玩家回合 (按住紅鳥拖曳發射)'; turnEl.className = 'p1-color';
         } else {
           turnEl.textContent = '綠豬王思考中...'; turnEl.className = 'ai-color';
           setTimeout(() => { if (this.state === GameState.AIMING) this.executeAITurn(); }, 1000);
@@ -352,12 +366,23 @@
       }
 
       render() {
+        this.pulseTime += 0.05;
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.fillStyle = '#8B5A2B'; this.ctx.fillRect(0, CONFIG.groundY, this.canvas.width, 80);
         this.ctx.fillStyle = '#2E8B57'; this.ctx.fillRect(0, CONFIG.groundY, this.canvas.width, 10);
 
         this.ctx.fillStyle = this.p1.color; this.ctx.beginPath(); this.ctx.arc(this.p1.x, this.p1.y, this.p1.radius, 0, Math.PI * 2); this.ctx.fill();
         this.ctx.fillStyle = this.ai.color; this.ctx.beginPath(); this.ctx.arc(this.ai.x, this.ai.y, this.ai.radius, 0, Math.PI * 2); this.ctx.fill();
+
+        // 輪到玩家時繪製觸控提示光圈
+        if (this.state === GameState.AIMING && this.turn === 1 && !this.isDragging) {
+          const pulseRadius = this.p1.radius + 10 + Math.sin(this.pulseTime * 3) * 6;
+          this.ctx.strokeStyle = 'rgba(255, 235, 59, 0.8)';
+          this.ctx.lineWidth = 3;
+          this.ctx.beginPath();
+          this.ctx.arc(this.p1.x, this.p1.y, pulseRadius, 0, Math.PI * 2);
+          this.ctx.stroke();
+        }
 
         this.obstacles.forEach(obs => {
           if (obs.alive) {
@@ -375,16 +400,16 @@
 
         if (this.state === GameState.AIMING && this.isDragging && this.turn === 1) {
           const anchor = this.activeAnchor;
-          this.ctx.strokeStyle = '#5c4033'; this.ctx.lineWidth = 3; this.ctx.beginPath();
+          this.ctx.strokeStyle = '#5c4033'; this.ctx.lineWidth = 4; this.ctx.beginPath();
           this.ctx.moveTo(anchor.x, anchor.y); this.ctx.lineTo(this.dragPos.x, this.dragPos.y); this.ctx.stroke();
 
           let simVx = (anchor.x - this.dragPos.x) * CONFIG.launchPower, simVy = (anchor.y - this.dragPos.y) * CONFIG.launchPower;
           let simX = this.dragPos.x, simY = this.dragPos.y;
-          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
           for (let i = 0; i < 25; i++) {
             simX += simVx; simY += simVy; simVy += CONFIG.gravity;
             if (simY > CONFIG.groundY) break;
-            this.ctx.beginPath(); this.ctx.arc(simX, simY, 3, 0, Math.PI * 2); this.ctx.fill();
+            this.ctx.beginPath(); this.ctx.arc(simX, simY, 4, 0, Math.PI * 2); this.ctx.fill();
           }
         }
 
@@ -424,3 +449,7 @@
   </script>
 </body>
 </html>
+
+      
+      
+      
