@@ -1,0 +1,426 @@
+ <!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>憤怒鳥：單人極限挑戰版 (Engine Standard)</title>
+  <style>
+    * { 
+      box-sizing: border-box; 
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    body { 
+      margin: 0; 
+      padding: 10px; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      justify-content: center;
+      min-height: 100vh;
+      background: #e0f7fa; 
+      font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; 
+      overflow: hidden;
+    }
+    h1 { 
+      margin: 0 0 8px 0; 
+      font-size: 22px; 
+      color: #333; 
+      text-align: center;
+    }
+    #info { 
+      display: flex; 
+      justify-content: space-between; 
+      width: 100%;
+      max-width: 800px;
+      background: white; 
+      padding: 8px 16px; 
+      border-radius: 8px; 
+      font-weight: bold; 
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      font-size: 14px;
+    }
+    .p1-color { color: #e74c3c; }
+    .ai-color { color: #2ecc71; }
+    #turn-banner { 
+      margin: 8px 0; 
+      font-size: 15px; 
+      font-weight: bold; 
+      background: #fff;
+      padding: 4px 14px; 
+      border-radius: 20px; 
+      border: 2px solid #333;
+      text-align: center;
+    }
+    #canvas-container {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      justify-content: center;
+    }
+    canvas { 
+      width: 100%;
+      height: auto;
+      background: #87CEEB; 
+      border: 3px solid #333; 
+      border-radius: 6px; 
+      touch-action: none; 
+      cursor: pointer; 
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>憤怒鳥：單人極限挑戰版</h1>
+
+  <div id="info">
+    <div class="p1-color">玩家 (紅鳥) HP：<span id="p1-hp">300</span></div>
+    <div class="ai-color">綠豬王 (AI) HP：<span id="ai-hp">300</span></div>
+  </div>
+
+  <div id="turn-banner">當前發射：<span id="current-turn" class="p1-color">玩家回合 (請拖曳發射)</span></div>
+  
+  <div id="canvas-container">
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. 系統組態與數學引擎 (Math & Config)
+    // ==========================================
+    const GameState = { AIMING: 'AIMING', FLYING: 'FLYING', RESETTING: 'RESETTING', GAMEOVER: 'GAMEOVER' };
+    const CONFIG = { gravity: 0.25, maxDrag: 80, launchPower: 0.15, groundY: 320, fixedDelta: 1 / 60 };
+
+    // 連續碰撞檢測 (Ray-AABB Slab Test)
+    function checkRayAABB(p1, p2, box) {
+      const minX = box.x - p1.radius, maxX = box.x + box.w + p1.radius;
+      const minY = box.y - p1.radius, maxY = box.y + box.h + p1.radius;
+      let dx = p2.x - p1.x, dy = p2.y - p1.y, tmin = 0, tmax = 1;
+
+      if (Math.abs(dx) < 1e-8) {
+        if (p1.x < minX || p1.x > maxX) return false;
+      } else {
+        let invD = 1.0 / dx, t1 = (minX - p1.x) * invD, t2 = (maxX - p1.x) * invD;
+        if (t1 > t2) [t1, t2] = [t2, t1];
+        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+        if (tmin > tmax) return false;
+      }
+
+      if (Math.abs(dy) < 1e-8) {
+        if (p1.y < minY || p1.y > maxY) return false;
+      } else {
+        let invD = 1.0 / dy, t1 = (minY - p1.y) * invD, t2 = (maxY - p1.y) * invD;
+        if (t1 > t2) [t1, t2] = [t2, t1];
+        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+        if (tmin > tmax) return false;
+      }
+      return true;
+    }
+
+    // ==========================================
+    // 2. 實體與視覺特效系統 (Entities & VFX)
+    // ==========================================
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x; this.y = y; this.radius = Math.random() * 4 + 2; this.color = color;
+        const angle = Math.random() * Math.PI * 2, speed = Math.random() * 6 + 2;
+        this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
+        this.alpha = 1; this.decay = Math.random() * 0.03 + 0.015;
+      }
+      update() { this.x += this.vx; this.y += this.vy; this.vy += CONFIG.gravity * 0.5; this.alpha -= this.decay; }
+      draw(ctx) {
+        ctx.save(); ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color; ctx.fill(); ctx.restore();
+      }
+    }
+
+    // ==========================================
+    // 3. 核心遊戲引擎 (Game Loop & State Machine)
+    // ==========================================
+    class GameEngine {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.state = GameState.AIMING;
+        this.turn = 1; // 1: 玩家, 2: AI
+        this.aiTurnCount = 0;
+
+        this.p1 = { x: 100, y: CONFIG.groundY - 40, hp: 300, radius: 18, color: '#e74c3c' };
+        this.ai = { x: 700, y: CONFIG.groundY - 40, hp: 300, radius: 22, color: '#2ecc71' };
+        this.bird = { x: this.p1.x, y: this.p1.y, vx: 0, vy: 0, radius: 15, flightFrames: 0 };
+        this.dragPos = { x: this.p1.x, y: this.p1.y };
+
+        this.lastTime = performance.now();
+        this.accumulator = 0;
+        this.particles = [];
+
+        this.initAudio();
+        this.initInput();
+        this.resetMap();
+        this.loop = this.loop.bind(this);
+        requestAnimationFrame(this.loop);
+      }
+
+      get activeAnchor() { return this.turn === 1 ? { x: this.p1.x, y: this.p1.y } : { x: this.ai.x, y: this.ai.y }; }
+
+      initAudio() {
+        const unlock = () => {
+          if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+          window.removeEventListener('pointerdown', unlock);
+          window.removeEventListener('touchstart', unlock);
+        };
+        window.addEventListener('pointerdown', unlock);
+        window.addEventListener('touchstart', unlock);
+      }
+
+      playSound(type) {
+        if (!this.audioCtx || this.audioCtx.state !== 'running') return;
+        const osc = this.audioCtx.createOscillator(), gain = this.audioCtx.createGain(), now = this.audioCtx.currentTime;
+        if (type === 'launch') {
+          osc.type = 'sine'; osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+          gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        } else if (type === 'hit') {
+          osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
+          gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        }
+        osc.connect(gain); gain.connect(this.audioCtx.destination);
+        osc.start(); osc.stop(now + 0.2);
+      }
+
+      createExplosion(x, y, color, count = 20) {
+        for (let i = 0; i < count; i++) this.particles.push(new Particle(x, y, color));
+      }
+
+      getCanvasPos(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+          x: (clientX - rect.left) * scaleX,
+          y: (clientY - rect.top) * scaleY
+        };
+      }
+
+      initInput() {
+        const startDrag = (pos) => {
+          if (this.state !== GameState.AIMING || this.turn !== 1) return;
+          const anchor = this.activeAnchor;
+          if (Math.hypot(pos.x - anchor.x, pos.y - anchor.y) < 50) this.isDragging = true;
+        };
+
+        const moveDrag = (pos) => {
+          if (!this.isDragging || this.turn !== 1) return;
+          const anchor = this.activeAnchor, dx = pos.x - anchor.x, dy = pos.y - anchor.y, dist = Math.hypot(dx, dy);
+          if (dist > CONFIG.maxDrag) {
+            const angle = Math.atan2(dy, dx);
+            this.dragPos.x = anchor.x + Math.cos(angle) * CONFIG.maxDrag;
+            this.dragPos.y = anchor.y + Math.sin(angle) * CONFIG.maxDrag;
+          } else {
+            this.dragPos.x = pos.x; this.dragPos.y = pos.y;
+          }
+        };
+
+        const endDrag = () => {
+          if (!this.isDragging || this.turn !== 1) return;
+          this.isDragging = false; this.state = GameState.FLYING;
+          const anchor = this.activeAnchor;
+          this.bird.x = this.dragPos.x; this.bird.y = this.dragPos.y;
+          this.bird.vx = (anchor.x - this.dragPos.x) * CONFIG.launchPower;
+          this.bird.vy = (anchor.y - this.dragPos.y) * CONFIG.launchPower;
+          this.bird.flightFrames = 0;
+          this.playSound('launch');
+        };
+
+        this.canvas.addEventListener('pointerdown', e => startDrag(this.getCanvasPos(e)));
+        window.addEventListener('pointermove', e => moveDrag(this.getCanvasPos(e)));
+        window.addEventListener('pointerup', endDrag);
+      }
+
+      executeAITurn() {
+        this.aiTurnCount++;
+        const targetX = this.p1.x, targetY = this.p1.y, startX = this.ai.x, startY = this.ai.y;
+        const dx = targetX - startX, dy = targetY - startY, t = 45; 
+        
+        let idealVx = dx / t;
+        let idealVy = (dy - 0.5 * CONFIG.gravity * t * t) / t;
+        
+        const errorMargin = Math.max(0.5, 5 - this.aiTurnCount * 1.2); 
+        const noiseX = (Math.random() - 0.5) * errorMargin;
+        const noiseY = (Math.random() - 0.5) * errorMargin;
+
+        this.bird.x = startX; this.bird.y = startY;
+        this.bird.vx = idealVx + noiseX; this.bird.vy = idealVy + noiseY;
+        this.bird.flightFrames = 0; this.state = GameState.FLYING;
+        this.playSound('launch');
+      }
+
+      resetMap() {
+        this.obstacles = [
+          { x: 380, y: 200, w: 15, h: 120, alive: true },
+          { x: 405, y: 200, w: 15, h: 120, alive: true },
+          { x: 360, y: 190, w: 80, h: 10, alive: true },
+          { x: 380, y: 110, w: 40, h: 80, alive: true }
+        ];
+        this.pigs = [{ x: 400, y: 280, radius: 15, alive: true }];
+      }
+
+      physicsStep() {
+        if (this.state !== GameState.FLYING) return;
+        const prevPos = { x: this.bird.x, y: this.bird.y, radius: this.bird.radius };
+
+        this.bird.x += this.bird.vx; this.bird.y += this.bird.vy;
+        this.bird.vy += CONFIG.gravity; this.bird.flightFrames++;
+        const currPos = { x: this.bird.x, y: this.bird.y };
+
+        for (let obs of this.obstacles) {
+          if (obs.alive && checkRayAABB(prevPos, currPos, obs)) {
+            obs.alive = false; this.bird.vx *= -0.5; this.playSound('hit');
+            this.createExplosion(this.bird.x, this.bird.y, '#CD853F', 15);
+            break;
+          }
+        }
+
+        for (let pig of this.pigs) {
+          if (pig.alive && Math.hypot(this.bird.x - pig.x, this.bird.y - pig.y) < this.bird.radius + pig.radius) {
+            pig.alive = false; this.bird.vx *= 0.7; this.playSound('hit');
+            this.createExplosion(pig.x, pig.y, '#2ecc71', 20);
+          }
+        }
+
+        const target = this.turn === 1 ? this.ai : this.p1, self = this.turn === 1 ? this.p1 : this.ai;
+        if (Math.hypot(this.bird.x - target.x, this.bird.y - target.y) < this.bird.radius + target.radius) {
+          this.createExplosion(target.x, target.y, target.color, 35); this.applyDamage(target, 100); return;
+        }
+
+        if (this.bird.flightFrames > 10 && Math.hypot(this.bird.x - self.x, this.bird.y - self.y) < this.bird.radius + self.radius) {
+          this.createExplosion(self.x, self.y, self.color, 35); this.applyDamage(self, 100); return;
+        }
+
+        if (this.bird.y >= CONFIG.groundY - 15 || this.bird.x < -20 || this.bird.x > this.canvas.width + 20 || this.bird.flightFrames > 350) {
+          const clampX = Math.max(10, Math.min(this.canvas.width - 10, this.bird.x));
+          const clampY = Math.max(10, Math.min(CONFIG.groundY, this.bird.y));
+          this.createExplosion(clampX, clampY, '#DDD', 12); this.handleTurnEnd();
+        }
+      }
+
+      applyDamage(target, amount) {
+        target.hp = Math.max(0, target.hp - amount);
+        document.getElementById('p1-hp').textContent = this.p1.hp;
+        document.getElementById('ai-hp').textContent = this.ai.hp;
+        this.playSound('hit'); this.handleTurnEnd();
+      }
+
+      handleTurnEnd() {
+        this.state = GameState.RESETTING;
+        setTimeout(() => {
+          if (this.p1.hp <= 0 || this.ai.hp <= 0) {
+            let winnerMsg = (this.p1.hp <= 0 && this.ai.hp <= 0) 
+              ? (this.turn === 1 ? '💀 自殺失敗！你失誤砸死自己了，綠豬王獲勝！' : '🎉 綠豬王失誤砸死自己，恭喜你獲勝！')
+              : (this.p1.hp <= 0 ? '💀 綠豬王獲勝，挑戰失敗！' : '🎉 恭喜你擊敗綠豬王，獲得勝利！');
+            alert(winnerMsg); this.state = GameState.GAMEOVER; this.resetGame();
+          } else {
+            this.switchTurn();
+          }
+        }, 800);
+      }
+
+      switchTurn() {
+        this.turn = this.turn === 1 ? 2 : 1;
+        const anchor = this.activeAnchor;
+        this.dragPos = { x: anchor.x, y: anchor.y };
+        this.bird.x = anchor.x; this.bird.y = anchor.y; this.state = GameState.AIMING;
+
+        const turnEl = document.getElementById('current-turn');
+        if (this.turn === 1) {
+          turnEl.textContent = '玩家回合 (請拖曳發射)'; turnEl.className = 'p1-color';
+        } else {
+          turnEl.textContent = '綠豬王思考中...'; turnEl.className = 'ai-color';
+          setTimeout(() => { if (this.state === GameState.AIMING) this.executeAITurn(); }, 1000);
+        }
+      }
+
+      resetGame() {
+        this.p1.hp = 300; this.ai.hp = 300; this.aiTurnCount = 0;
+        document.getElementById('p1-hp').textContent = 300; document.getElementById('ai-hp').textContent = 300;
+        this.turn = 1; this.resetMap(); this.switchTurn();
+      }
+
+      render() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillStyle = '#8B5A2B'; this.ctx.fillRect(0, CONFIG.groundY, this.canvas.width, 80);
+        this.ctx.fillStyle = '#2E8B57'; this.ctx.fillRect(0, CONFIG.groundY, this.canvas.width, 10);
+
+        this.ctx.fillStyle = this.p1.color; this.ctx.beginPath(); this.ctx.arc(this.p1.x, this.p1.y, this.p1.radius, 0, Math.PI * 2); this.ctx.fill();
+        this.ctx.fillStyle = this.ai.color; this.ctx.beginPath(); this.ctx.arc(this.ai.x, this.ai.y, this.ai.radius, 0, Math.PI * 2); this.ctx.fill();
+
+        this.obstacles.forEach(obs => {
+          if (obs.alive) {
+            this.ctx.fillStyle = '#CD853F'; this.ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+            this.ctx.strokeStyle = '#8B4513'; this.ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+          }
+        });
+
+        this.pigs.forEach(pig => {
+          if (pig.alive) {
+            this.ctx.fillStyle = '#2ecc71'; this.ctx.beginPath();
+            this.ctx.arc(pig.x, pig.y, pig.radius, 0, Math.PI * 2); this.ctx.fill();
+          }
+        });
+
+        if (this.state === GameState.AIMING && this.isDragging && this.turn === 1) {
+          const anchor = this.activeAnchor;
+          this.ctx.strokeStyle = '#5c4033'; this.ctx.lineWidth = 3; this.ctx.beginPath();
+          this.ctx.moveTo(anchor.x, anchor.y); this.ctx.lineTo(this.dragPos.x, this.dragPos.y); this.ctx.stroke();
+
+          let simVx = (anchor.x - this.dragPos.x) * CONFIG.launchPower, simVy = (anchor.y - this.dragPos.y) * CONFIG.launchPower;
+          let simX = this.dragPos.x, simY = this.dragPos.y;
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+          for (let i = 0; i < 25; i++) {
+            simX += simVx; simY += simVy; simVy += CONFIG.gravity;
+            if (simY > CONFIG.groundY) break;
+            this.ctx.beginPath(); this.ctx.arc(simX, simY, 3, 0, Math.PI * 2); this.ctx.fill();
+          }
+        }
+
+        if (this.state === GameState.FLYING || (this.state === GameState.AIMING && this.turn === 1)) {
+          this.ctx.fillStyle = this.turn === 1 ? this.p1.color : this.ai.color;
+          this.ctx.beginPath(); 
+          this.ctx.arc(this.state === GameState.FLYING ? this.bird.x : this.dragPos.x, 
+                       this.state === GameState.FLYING ? this.bird.y : this.dragPos.y, 
+                       this.bird.radius, 0, Math.PI * 2); 
+          this.ctx.fill();
+        }
+
+        this.particles.forEach(p => p.draw(this.ctx));
+      }
+
+      loop(currentTime) {
+        const deltaTime = (currentTime - this.lastTime) / 1000;
+        this.lastTime = currentTime;
+        this.accumulator += Math.min(deltaTime, 0.25);
+
+        while (this.accumulator >= CONFIG.fixedDelta) {
+          this.physicsStep();
+          this.accumulator -= CONFIG.fixedDelta;
+        }
+        
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          this.particles[i].update();
+          if (this.particles[i].alpha <= 0) this.particles.splice(i, 1);
+        }
+
+        this.render();
+        requestAnimationFrame(this.loop);
+      }
+    }
+
+    window.onload = () => new GameEngine('gameCanvas');
+  </script>
+</body>
+</html>
