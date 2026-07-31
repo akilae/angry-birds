@@ -3,453 +3,375 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>憤怒鳥：單人極限挑戰版 (Mobile Touch Optimized)</title>
+  <title>憤怒鳥：五大關卡極限戰役 (Matter.js Edition)</title>
   <style>
-    * { 
-      box-sizing: border-box; 
+    * {
+      box-sizing: border-box;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
       touch-action: none;
     }
-    body { 
-      margin: 0; 
-      padding: 10px; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      justify-content: center;
-      min-height: 100vh;
-      background: #e0f7fa; 
-      font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; 
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
       overflow: hidden;
+      background: #1a1a2e;
+      font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
-    h1 { 
-      margin: 0 0 8px 0; 
-      font-size: 20px; 
-      color: #333; 
-      text-align: center;
-    }
-    #info { 
-      display: flex; 
-      justify-content: space-between; 
-      width: 100%;
-      max-width: 800px;
-      background: white; 
-      padding: 8px 16px; 
-      border-radius: 8px; 
-      font-weight: bold; 
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      font-size: 14px;
-    }
-    .p1-color { color: #e74c3c; }
-    .ai-color { color: #2ecc71; }
-    #turn-banner { 
-      margin: 8px 0; 
-      font-size: 14px; 
-      font-weight: bold; 
-      background: #fff;
-      padding: 6px 14px; 
-      border-radius: 20px; 
-      border: 2px solid #333;
-      text-align: center;
-    }
-    #canvas-container {
-      width: 100%;
+    #ui-layer {
+      position: absolute;
+      top: 10px;
+      width: 95%;
       max-width: 800px;
       display: flex;
-      justify-content: center;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      padding: 10px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
-    canvas { 
+    .hud-title { font-size: 18px; font-weight: bold; color: #f39c12; }
+    .hud-status { font-size: 14px; }
+    #btn-restart {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #game-container {
+      position: relative;
       width: 100%;
-      height: auto;
-      background: #87CEEB; 
-      border: 3px solid #333; 
-      border-radius: 6px; 
-      touch-action: none; 
-      cursor: pointer; 
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      max-width: 800px;
+      aspect-ratio: 2 / 1;
+      background: linear-gradient(to bottom, #70a1ff, #dfe4ea);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
+    canvas { width: 100%; height: 100%; display: block; }
   </style>
+  <!-- 引入 Matter.js 2D 物理引擎 CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 </head>
 <body>
 
-  <h1>憤怒鳥：單人極限挑戰版</h1>
-
-  <div id="info">
-    <div class="p1-color">玩家 (紅鳥) HP：<span id="p1-hp">300</span></div>
-    <div class="ai-color">綠豬王 (AI) HP：<span id="ai-hp">300</span></div>
+  <div id="ui-layer">
+    <div class="hud-title">關卡：<span id="lvl-txt">1 / 5</span></div>
+    <div class="hud-status">剩餘紅鳥：<span id="birds-txt">3</span> | 敵豬：<span id="pigs-txt">0</span></div>
+    <button id="btn-restart" onclick="restartLevel()">重置本關</button>
   </div>
 
-  <div id="turn-banner">當前發射：<span id="current-turn" class="p1-color">玩家回合 (按住紅鳥拖曳發射)</span></div>
-  
-  <div id="canvas-container">
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <div id="game-container">
+    <canvas id="canvas"></canvas>
   </div>
 
   <script>
-    const GameState = { AIMING: 'AIMING', FLYING: 'FLYING', RESETTING: 'RESETTING', GAMEOVER: 'GAMEOVER' };
-    const CONFIG = { gravity: 0.25, maxDrag: 90, launchPower: 0.16, groundY: 320, fixedDelta: 1 / 60 };
+    const { Engine, Render, Runner, Bodies, Composite, Constraint, Mouse, MouseConstraint, Events, Body, Vector } = Matter;
 
-    function checkRayAABB(p1, p2, box) {
-      const minX = box.x - p1.radius, maxX = box.x + box.w + p1.radius;
-      const minY = box.y - p1.radius, maxY = box.y + box.h + p1.radius;
-      let dx = p2.x - p1.x, dy = p2.y - p1.y, tmin = 0, tmax = 1;
+    const canvas = document.getElementById('canvas');
+    const container = document.getElementById('game-container');
+    const WIDTH = 800;
+    const HEIGHT = 400;
 
-      if (Math.abs(dx) < 1e-8) {
-        if (p1.x < minX || p1.x > maxX) return false;
-      } else {
-        let invD = 1.0 / dx, t1 = (minX - p1.x) * invD, t2 = (maxX - p1.x) * invD;
-        if (t1 > t2) [t1, t2] = [t2, t1];
-        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-        if (tmin > tmax) return false;
+    let engine, runner, render, mouseConstraint;
+    let slingAnchor = { x: 130, y: 280 };
+    let currentLevel = 0;
+    let birdsLeft = 3;
+    let currentBird = null;
+    let isLaunched = false;
+    let pigs = [];
+    let blocks = [];
+    let canSkill = false;
+
+    // 關卡配置陣列
+    const LEVEL_CONFIGS = [
+      // 關卡 1：新手木塔
+      {
+        birds: 3,
+        build: () => {
+          createBlock(550, 310, 15, 80, '#d35400');
+          createBlock(630, 310, 15, 80, '#d35400');
+          createBlock(590, 265, 100, 15, '#e67e22');
+          createPig(590, 240, 16);
+        }
+      },
+      // 關卡 2：雙重木城堡
+      {
+        birds: 3,
+        build: () => {
+          createBlock(500, 310, 15, 80, '#d35400');
+          createBlock(560, 310, 15, 80, '#d35400');
+          createBlock(530, 265, 80, 15, '#e67e22');
+          createPig(530, 240, 15);
+
+          createBlock(640, 310, 15, 80, '#d35400');
+          createBlock(700, 310, 15, 80, '#d35400');
+          createBlock(670, 265, 80, 15, '#e67e22');
+          createPig(670, 240, 15);
+        }
+      },
+      // 關卡 3：三層高塔巨陣
+      {
+        birds: 4,
+        build: () => {
+          // 一層
+          createBlock(560, 310, 15, 80, '#7f8c8d');
+          createBlock(640, 310, 15, 80, '#7f8c8d');
+          createBlock(600, 265, 100, 15, '#bdc3c7');
+          createPig(600, 240, 15);
+          // 二層
+          createBlock(575, 220, 15, 70, '#d35400');
+          createBlock(625, 220, 15, 70, '#d35400');
+          createBlock(600, 180, 75, 15, '#e67e22');
+          createPig(600, 155, 14);
+        }
+      },
+      // 關卡 4：石質堡壘護衛
+      {
+        birds: 4,
+        build: () => {
+          // 石壁
+          createBlock(480, 290, 25, 120, '#2c3e50');
+          createBlock(580, 310, 15, 80, '#d35400');
+          createBlock(660, 310, 15, 80, '#d35400');
+          createBlock(620, 265, 100, 15, '#e67e22');
+          createPig(620, 240, 18);
+          createPig(530, 330, 15);
+        }
+      },
+      // 關卡 5：綠豬王終極要塞
+      {
+        birds: 4,
+        build: () => {
+          createBlock(500, 290, 20, 120, '#2c3e50');
+          createBlock(720, 290, 20, 120, '#2c3e50');
+          createBlock(610, 225, 240, 15, '#7f8c8d');
+
+          createBlock(550, 180, 15, 70, '#d35400');
+          createBlock(670, 180, 15, 70, '#d35400');
+          createBlock(610, 140, 140, 15, '#e67e22');
+
+          createPig(610, 105, 22); // 綠豬王
+          createPig(550, 330, 15);
+          createPig(670, 330, 15);
+        }
       }
+    ];
 
-      if (Math.abs(dy) < 1e-8) {
-        if (p1.y < minY || p1.y > maxY) return false;
-      } else {
-        let invD = 1.0 / dy, t1 = (minY - p1.y) * invD, t2 = (maxY - p1.y) * invD;
-        if (t1 > t2) [t1, t2] = [t2, t1];
-        tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-        if (tmin > tmax) return false;
-      }
-      return true;
+    function initEngine() {
+      engine = Engine.create({ gravity: { x: 0, y: 1 } });
+      canvas.width = WIDTH;
+      canvas.height = HEIGHT;
+
+      render = Render.create({
+        canvas: canvas,
+        engine: engine,
+        options: {
+          width: WIDTH,
+          height: HEIGHT,
+          wireframes: false,
+          background: 'transparent'
+        }
+      });
+
+      Runner.run(Runner.create(), engine);
+      Render.run(render);
+
+      // 地板與邊界
+      const ground = Bodies.rectangle(400, 370, 800, 40, { isStatic: true, render: { fillStyle: '#27ae60' } });
+      const leftWall = Bodies.rectangle(-10, 200, 20, 400, { isStatic: true });
+      const rightWall = Bodies.rectangle(810, 200, 20, 400, { isStatic: true });
+      Composite.add(engine.world, [ground, leftWall, rightWall]);
+
+      // 觸控 / 滑鼠控制
+      const mouse = Mouse.create(render.canvas);
+      mouseConstraint = MouseConstraint.create(engine, {
+        mouse: mouse,
+        constraint: { stiffness: 0.1, render: { visible: false } }
+      });
+      Composite.add(engine.world, mouseConstraint);
+
+      // 畫面發射拉曳邏輯
+      Events.on(mouseConstraint, 'enddrag', (e) => {
+        if (e.body === currentBird && !isLaunched) {
+          const dist = Vector.magnitude(Vector.sub(currentBird.position, slingAnchor));
+          if (dist > 20) {
+            isLaunched = true;
+            canSkill = true;
+            setTimeout(spawnNextBird, 4000);
+          }
+        }
+      });
+
+      // 碰撞檢測：消除敵豬
+      Events.on(engine, 'collisionStart', (e) => {
+        e.pairs.forEach(pair => {
+          pigs.forEach(pig => {
+            if ((pair.bodyA === pig || pair.bodyB === pig) && pair.collision.supports.length > 0) {
+              const speedA = Vector.magnitude(pair.bodyA.velocity);
+              const speedB = Vector.magnitude(pair.bodyB.velocity);
+              if (speedA > 2.5 || speedB > 2.5) {
+                pig.hp -= Math.max(speedA, speedB) * 15;
+              }
+            }
+          });
+        });
+      });
+
+      // 點擊觸發「爆破炸彈技能」
+      canvas.addEventListener('pointerdown', () => {
+        if (isLaunched && canSkill && currentBird) {
+          canSkill = false;
+          // 產生半徑 150px 的衝擊波爆破
+          const pos = currentBird.position;
+          const bodies = Composite.allBodies(engine.world);
+          bodies.forEach(b => {
+            if (!b.isStatic) {
+              const d = Vector.magnitude(Vector.sub(b.position, pos));
+              if (d < 150 && d > 0) {
+                const force = Vector.mult(Vector.normalise(Vector.sub(b.position, pos)), 0.15 * (1 - d / 150));
+                Body.applyForce(b, b.position, force);
+              }
+            }
+          });
+          currentBird.render.fillStyle = '#f1c40f';
+        }
+      });
+
+      // 主循環：清理生命值歸零的豬隻與更新 UI
+      Events.on(engine, 'beforeUpdate', () => {
+        for (let i = pigs.length - 1; i >= 0; i--) {
+          if (pigs[i].hp <= 0) {
+            Composite.remove(engine.world, pigs[i]);
+            pigs.splice(i, 1);
+          }
+        }
+        updateUI();
+        checkLevelRules();
+      });
+
+      loadLevel(0);
     }
 
-    class Particle {
-      constructor(x, y, color) {
-        this.x = x; this.y = y; this.radius = Math.random() * 4 + 2; this.color = color;
-        const angle = Math.random() * Math.PI * 2, speed = Math.random() * 6 + 2;
-        this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed;
-        this.alpha = 1; this.decay = Math.random() * 0.03 + 0.015;
-      }
-      update() { this.x += this.vx; this.y += this.vy; this.vy += CONFIG.gravity * 0.5; this.alpha -= this.decay; }
-      draw(ctx) {
-        ctx.save(); ctx.globalAlpha = Math.max(0, this.alpha);
-        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color; ctx.fill(); ctx.restore();
+    function createBlock(x, y, w, h, color) {
+      const block = Bodies.rectangle(x, y, w, h, {
+        density: 0.001,
+        friction: 0.5,
+        render: { fillStyle: color, strokeStyle: '#2c3e50', lineWidth: 1 }
+      });
+      blocks.push(block);
+      Composite.add(engine.world, block);
+    }
+
+    function createPig(x, y, r) {
+      const pig = Bodies.circle(x, y, r, {
+        density: 0.0008,
+        friction: 0.3,
+        restitution: 0.2,
+        render: { fillStyle: '#2ecc71', strokeStyle: '#27ae60', lineWidth: 2 }
+      });
+      pig.hp = 30;
+      pigs.push(pig);
+      Composite.add(engine.world, pig);
+    }
+
+    function spawnBird() {
+      if (birdsLeft <= 0) return;
+      birdsLeft--;
+      isLaunched = false;
+      canSkill = false;
+
+      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, 14, {
+        density: 0.004,
+        friction: 0.2,
+        restitution: 0.4,
+        render: { fillStyle: '#e74c3c' }
+      });
+
+      const sling = Constraint.create({
+        pointA: slingAnchor,
+        bodyB: currentBird,
+        stiffness: 0.05,
+        length: 0,
+        render: { visible: true, strokeStyle: '#7f8c8d', lineWidth: 3 }
+      });
+
+      Events.on(engine, 'afterUpdate', function releaseHandler() {
+        if (isLaunched && sling.bodyB) {
+          const dist = Vector.magnitude(Vector.sub(currentBird.position, slingAnchor));
+          if (dist < 10 || currentBird.position.x > slingAnchor.x + 10) {
+            sling.bodyB = null;
+            Composite.remove(engine.world, sling);
+            Events.off(engine, 'afterUpdate', releaseHandler);
+          }
+        }
+      });
+
+      Composite.add(engine.world, [currentBird, sling]);
+    }
+
+    function spawnNextBird() {
+      if (pigs.length > 0 && birdsLeft > 0) {
+        spawnBird();
       }
     }
 
-    class GameEngine {
-      constructor(canvasId) {
-        this.canvas = document.getElementById(canvasId);
-        this.ctx = this.canvas.getContext('2d');
-        this.state = GameState.AIMING;
-        this.turn = 1;
-        this.aiTurnCount = 0;
-        this.pulseTime = 0;
+    function loadLevel(idx) {
+      currentLevel = idx;
+      // 清空舊實體
+      pigs.forEach(p => Composite.remove(engine.world, p));
+      blocks.forEach(b => Composite.remove(engine.world, b));
+      if (currentBird) Composite.remove(engine.world, currentBird);
+      pigs = [];
+      blocks = [];
 
-        this.p1 = { x: 100, y: CONFIG.groundY - 40, hp: 300, radius: 20, color: '#e74c3c' };
-        this.ai = { x: 700, y: CONFIG.groundY - 40, hp: 300, radius: 22, color: '#2ecc71' };
-        this.bird = { x: this.p1.x, y: this.p1.y, vx: 0, vy: 0, radius: 16, flightFrames: 0 };
-        this.dragPos = { x: this.p1.x, y: this.p1.y };
+      const cfg = LEVEL_CONFIGS[currentLevel];
+      birdsLeft = cfg.birds;
+      cfg.build();
+      spawnBird();
+    }
 
-        this.lastTime = performance.now();
-        this.accumulator = 0;
-        this.particles = [];
-
-        this.initAudio();
-        this.initInput();
-        this.resetMap();
-        this.loop = this.loop.bind(this);
-        requestAnimationFrame(this.loop);
-      }
-
-      get activeAnchor() { return this.turn === 1 ? { x: this.p1.x, y: this.p1.y } : { x: this.ai.x, y: this.ai.y }; }
-
-      initAudio() {
-        const unlock = () => {
-          if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
-          window.removeEventListener('pointerdown', unlock);
-          window.removeEventListener('touchstart', unlock);
-        };
-        window.addEventListener('pointerdown', unlock);
-        window.addEventListener('touchstart', unlock);
-      }
-
-      playSound(type) {
-        if (!this.audioCtx || this.audioCtx.state !== 'running') return;
-        const osc = this.audioCtx.createOscillator(), gain = this.audioCtx.createGain(), now = this.audioCtx.currentTime;
-        if (type === 'launch') {
-          osc.type = 'sine'; osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
-          gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-        } else if (type === 'hit') {
-          osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
-          gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-        }
-        osc.connect(gain); gain.connect(this.audioCtx.destination);
-        osc.start(); osc.stop(now + 0.2);
-      }
-
-      createExplosion(x, y, color, count = 20) {
-        for (let i = 0; i < count; i++) this.particles.push(new Particle(x, y, color));
-      }
-
-      getCanvasPos(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
-        let clientX = e.clientX;
-        let clientY = e.clientY;
-        if (e.touches && e.touches.length > 0) {
-          clientX = e.touches[0].clientX;
-          clientY = e.touches[0].clientY;
-        } else if (e.changedTouches && e.changedTouches.length > 0) {
-          clientX = e.changedTouches[0].clientX;
-          clientY = e.changedTouches[0].clientY;
-        }
-        return {
-          x: (clientX - rect.left) * scaleX,
-          y: (clientY - rect.top) * scaleY
-        };
-      }
-
-      initInput() {
-        const onStart = (e) => {
-          if (this.state !== GameState.AIMING || this.turn !== 1) return;
-          const pos = this.getCanvasPos(e);
-          const anchor = this.activeAnchor;
-          // 大幅放寬手機觸控判定範圍至 90px
-          if (Math.hypot(pos.x - anchor.x, pos.y - anchor.y) < 90) {
-            this.isDragging = true;
-            this.dragPos.x = pos.x;
-            this.dragPos.y = pos.y;
-            if (e.cancelable) e.preventDefault();
-          }
-        };
-
-        const onMove = (e) => {
-          if (!this.isDragging || this.turn !== 1) return;
-          if (e.cancelable) e.preventDefault();
-          const pos = this.getCanvasPos(e);
-          const anchor = this.activeAnchor, dx = pos.x - anchor.x, dy = pos.y - anchor.y, dist = Math.hypot(dx, dy);
-          if (dist > CONFIG.maxDrag) {
-            const angle = Math.atan2(dy, dx);
-            this.dragPos.x = anchor.x + Math.cos(angle) * CONFIG.maxDrag;
-            this.dragPos.y = anchor.y + Math.sin(angle) * CONFIG.maxDrag;
-          } else {
-            this.dragPos.x = pos.x; this.dragPos.y = pos.y;
-          }
-        };
-
-        const onEnd = (e) => {
-          if (!this.isDragging || this.turn !== 1) return;
-          if (e.cancelable) e.preventDefault();
-          this.isDragging = false; 
-          this.state = GameState.FLYING;
-          const anchor = this.activeAnchor;
-          this.bird.x = this.dragPos.x; this.bird.y = this.dragPos.y;
-          this.bird.vx = (anchor.x - this.dragPos.x) * CONFIG.launchPower;
-          this.bird.vy = (anchor.y - this.dragPos.y) * CONFIG.launchPower;
-          this.bird.flightFrames = 0;
-          this.playSound('launch');
-        };
-
-        this.canvas.addEventListener('pointerdown', onStart);
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-
-        this.canvas.addEventListener('touchstart', onStart, { passive: false });
-        window.addEventListener('touchmove', onMove, { passive: false });
-        window.addEventListener('touchend', onEnd, { passive: false });
-      }
-
-      executeAITurn() {
-        this.aiTurnCount++;
-        const targetX = this.p1.x, targetY = this.p1.y, startX = this.ai.x, startY = this.ai.y;
-        const dx = targetX - startX, dy = targetY - startY, t = 45; 
-        
-        let idealVx = dx / t;
-        let idealVy = (dy - 0.5 * CONFIG.gravity * t * t) / t;
-        
-        const errorMargin = Math.max(0.5, 5 - this.aiTurnCount * 1.2); 
-        const noiseX = (Math.random() - 0.5) * errorMargin;
-        const noiseY = (Math.random() - 0.5) * errorMargin;
-
-        this.bird.x = startX; this.bird.y = startY;
-        this.bird.vx = idealVx + noiseX; this.bird.vy = idealVy + noiseY;
-        this.bird.flightFrames = 0; this.state = GameState.FLYING;
-        this.playSound('launch');
-      }
-
-      resetMap() {
-        this.obstacles = [
-          { x: 380, y: 200, w: 15, h: 120, alive: true },
-          { x: 405, y: 200, w: 15, h: 120, alive: true },
-          { x: 360, y: 190, w: 80, h: 10, alive: true },
-          { x: 380, y: 110, w: 40, h: 80, alive: true }
-        ];
-        this.pigs = [{ x: 400, y: 280, radius: 15, alive: true }];
-      }
-
-      physicsStep() {
-        if (this.state !== GameState.FLYING) return;
-        const prevPos = { x: this.bird.x, y: this.bird.y, radius: this.bird.radius };
-
-        this.bird.x += this.bird.vx; this.bird.y += this.bird.vy;
-        this.bird.vy += CONFIG.gravity; this.bird.flightFrames++;
-        const currPos = { x: this.bird.x, y: this.bird.y };
-
-        for (let obs of this.obstacles) {
-          if (obs.alive && checkRayAABB(prevPos, currPos, obs)) {
-            obs.alive = false; this.bird.vx *= -0.5; this.playSound('hit');
-            this.createExplosion(this.bird.x, this.bird.y, '#CD853F', 15);
-            break;
-          }
-        }
-
-        for (let pig of this.pigs) {
-          if (pig.alive && Math.hypot(this.bird.x - pig.x, this.bird.y - pig.y) < this.bird.radius + pig.radius) {
-            pig.alive = false; this.bird.vx *= 0.7; this.playSound('hit');
-            this.createExplosion(pig.x, pig.y, '#2ecc71', 20);
-          }
-        }
-
-        const target = this.turn === 1 ? this.ai : this.p1, self = this.turn === 1 ? this.p1 : this.ai;
-        if (Math.hypot(this.bird.x - target.x, this.bird.y - target.y) < this.bird.radius + target.radius) {
-          this.createExplosion(target.x, target.y, target.color, 35); this.applyDamage(target, 100); return;
-        }
-
-        if (this.bird.flightFrames > 10 && Math.hypot(this.bird.x - self.x, this.bird.y - self.y) < this.bird.radius + self.radius) {
-          this.createExplosion(self.x, self.y, self.color, 35); this.applyDamage(self, 100); return;
-        }
-
-        if (this.bird.y >= CONFIG.groundY - 15 || this.bird.x < -20 || this.bird.x > this.canvas.width + 20 || this.bird.flightFrames > 350) {
-          const clampX = Math.max(10, Math.min(this.canvas.width - 10, this.bird.x));
-          const clampY = Math.max(10, Math.min(CONFIG.groundY, this.bird.y));
-          this.createExplosion(clampX, clampY, '#DDD', 12); this.handleTurnEnd();
-        }
-      }
-
-      applyDamage(target, amount) {
-        target.hp = Math.max(0, target.hp - amount);
-        document.getElementById('p1-hp').textContent = this.p1.hp;
-        document.getElementById('ai-hp').textContent = this.ai.hp;
-        this.playSound('hit'); this.handleTurnEnd();
-      }
-
-      handleTurnEnd() {
-        this.state = GameState.RESETTING;
+    function checkLevelRules() {
+      // 擊敗所有敵豬 -> 進下一關
+      if (pigs.length === 0 && currentLevel < LEVEL_CONFIGS.length) {
         setTimeout(() => {
-          if (this.p1.hp <= 0 || this.ai.hp <= 0) {
-            let winnerMsg = (this.p1.hp <= 0 && this.ai.hp <= 0) 
-              ? (this.turn === 1 ? '💀 自殺失敗！你砸死自己了，綠豬王獲勝！' : '🎉 綠豬王失誤砸死自己，恭喜獲勝！')
-              : (this.p1.hp <= 0 ? '💀 綠豬王獲勝，挑戰失敗！' : '🎉 恭喜你擊敗綠豬王，獲得勝利！');
-            alert(winnerMsg); this.state = GameState.GAMEOVER; this.resetGame();
+          if (currentLevel + 1 < LEVEL_CONFIGS.length) {
+            alert(`🎉 恭喜通關第 ${currentLevel + 1} 關！進入下一個考驗！`);
+            loadLevel(currentLevel + 1);
           } else {
-            this.switchTurn();
+            alert('🏆 霸氣！你已順利通關全數 5 大關卡，徹底摧毀綠豬王國！');
+            loadLevel(0);
           }
-        }, 800);
-      }
-
-      switchTurn() {
-        this.turn = this.turn === 1 ? 2 : 1;
-        const anchor = this.activeAnchor;
-        this.dragPos = { x: anchor.x, y: anchor.y };
-        this.bird.x = anchor.x; this.bird.y = anchor.y; this.state = GameState.AIMING;
-
-        const turnEl = document.getElementById('current-turn');
-        if (this.turn === 1) {
-          turnEl.textContent = '玩家回合 (按住紅鳥拖曳發射)'; turnEl.className = 'p1-color';
-        } else {
-          turnEl.textContent = '綠豬王思考中...'; turnEl.className = 'ai-color';
-          setTimeout(() => { if (this.state === GameState.AIMING) this.executeAITurn(); }, 1000);
-        }
-      }
-
-      resetGame() {
-        this.p1.hp = 300; this.ai.hp = 300; this.aiTurnCount = 0;
-        document.getElementById('p1-hp').textContent = 300; document.getElementById('ai-hp').textContent = 300;
-        this.turn = 1; this.resetMap(); this.switchTurn();
-      }
-
-      render() {
-        this.pulseTime += 0.05;
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = '#8B5A2B'; this.ctx.fillRect(0, CONFIG.groundY, this.canvas.width, 80);
-        this.ctx.fillStyle = '#2E8B57'; this.ctx.fillRect(0, CONFIG.groundY, this.canvas.width, 10);
-
-        this.ctx.fillStyle = this.p1.color; this.ctx.beginPath(); this.ctx.arc(this.p1.x, this.p1.y, this.p1.radius, 0, Math.PI * 2); this.ctx.fill();
-        this.ctx.fillStyle = this.ai.color; this.ctx.beginPath(); this.ctx.arc(this.ai.x, this.ai.y, this.ai.radius, 0, Math.PI * 2); this.ctx.fill();
-
-        // 輪到玩家時繪製觸控提示光圈
-        if (this.state === GameState.AIMING && this.turn === 1 && !this.isDragging) {
-          const pulseRadius = this.p1.radius + 10 + Math.sin(this.pulseTime * 3) * 6;
-          this.ctx.strokeStyle = 'rgba(255, 235, 59, 0.8)';
-          this.ctx.lineWidth = 3;
-          this.ctx.beginPath();
-          this.ctx.arc(this.p1.x, this.p1.y, pulseRadius, 0, Math.PI * 2);
-          this.ctx.stroke();
-        }
-
-        this.obstacles.forEach(obs => {
-          if (obs.alive) {
-            this.ctx.fillStyle = '#CD853F'; this.ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-            this.ctx.strokeStyle = '#8B4513'; this.ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
-          }
-        });
-
-        this.pigs.forEach(pig => {
-          if (pig.alive) {
-            this.ctx.fillStyle = '#2ecc71'; this.ctx.beginPath();
-            this.ctx.arc(pig.x, pig.y, pig.radius, 0, Math.PI * 2); this.ctx.fill();
-          }
-        });
-
-        if (this.state === GameState.AIMING && this.isDragging && this.turn === 1) {
-          const anchor = this.activeAnchor;
-          this.ctx.strokeStyle = '#5c4033'; this.ctx.lineWidth = 4; this.ctx.beginPath();
-          this.ctx.moveTo(anchor.x, anchor.y); this.ctx.lineTo(this.dragPos.x, this.dragPos.y); this.ctx.stroke();
-
-          let simVx = (anchor.x - this.dragPos.x) * CONFIG.launchPower, simVy = (anchor.y - this.dragPos.y) * CONFIG.launchPower;
-          let simX = this.dragPos.x, simY = this.dragPos.y;
-          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-          for (let i = 0; i < 25; i++) {
-            simX += simVx; simY += simVy; simVy += CONFIG.gravity;
-            if (simY > CONFIG.groundY) break;
-            this.ctx.beginPath(); this.ctx.arc(simX, simY, 4, 0, Math.PI * 2); this.ctx.fill();
-          }
-        }
-
-        if (this.state === GameState.FLYING || (this.state === GameState.AIMING && this.turn === 1)) {
-          this.ctx.fillStyle = this.turn === 1 ? this.p1.color : this.ai.color;
-          this.ctx.beginPath(); 
-          this.ctx.arc(this.state === GameState.FLYING ? this.bird.x : this.dragPos.x, 
-                       this.state === GameState.FLYING ? this.bird.y : this.dragPos.y, 
-                       this.bird.radius, 0, Math.PI * 2); 
-          this.ctx.fill();
-        }
-
-        this.particles.forEach(p => p.draw(this.ctx));
-      }
-
-      loop(currentTime) {
-        const deltaTime = (currentTime - this.lastTime) / 1000;
-        this.lastTime = currentTime;
-        this.accumulator += Math.min(deltaTime, 0.25);
-
-        while (this.accumulator >= CONFIG.fixedDelta) {
-          this.physicsStep();
-          this.accumulator -= CONFIG.fixedDelta;
-        }
-        
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-          this.particles[i].update();
-          if (this.particles[i].alpha <= 0) this.particles.splice(i, 1);
-        }
-
-        this.render();
-        requestAnimationFrame(this.loop);
+        }, 500);
       }
     }
 
-    window.onload = () => new GameEngine('gameCanvas');
+    function restartLevel() {
+      loadLevel(currentLevel);
+    }
+
+    function updateUI() {
+      document.getElementById('lvl-txt').textContent = `${currentLevel + 1} / ${LEVEL_CONFIGS.length}`;
+      document.getElementById('birds-txt').textContent = birdsLeft + (currentBird && !isLaunched ? 1 : 0);
+      document.getElementById('pigs-txt').textContent = pigs.length;
+    }
+
+    window.onload = initEngine;
   </script>
 </body>
 </html>
-
-      
-      
-      
