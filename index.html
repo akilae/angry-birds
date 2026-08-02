@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>憤怒鳥：五大飛鳥商店無盡版</title>
+  <title>憤怒鳥：五大飛鳥商店無盡版 (Bug Fixed)</title>
   <style>
     * {
       box-sizing: border-box; -webkit-touch-callout: none;
@@ -155,9 +155,9 @@
     let slingAnchor = { x: 120, y: 280 };
     
     let unlockedLevel = 0; let currentLevel = 0;
-    let coins = 20; // 初始給點錢體驗
+    let coins = 20; 
     
-    let birdQueue = []; // 玩家目前擁有的鳥序列
+    let birdQueue = []; 
     let currentBird = null;
     let isLaunched = false;
     let pigs = []; let blocks = []; let allBirds = []; 
@@ -168,7 +168,6 @@
     let spawnTimeout = null; 
     const BIRD_CATEGORY = 0x0002;
 
-    // 定義五種鳥類
     const BIRD_TYPES = {
       red: { name: '紅鳥', cost: 20, color: '#e74c3c', r: 14, density: 0.005, rest: 0.4, desc: '平衡型 / 微推進' },
       blue: { name: '藍鳥', cost: 15, color: '#3498db', r: 10, density: 0.003, rest: 0.9, desc: '輕巧 / 高彈力' },
@@ -200,19 +199,30 @@
       document.getElementById('overlay').style.display = 'flex';
     }
 
-    // --- 商店系統 ---
+    // --- 商店系統 (完美除錯版) ---
     function openShop() {
-      if(isLevelTransitioning && birdQueue.length === 0 && pigs.length === 0) return; // 已贏不能買
-      document.getElementById('overlay').style.display = 'none'; // 隱藏死亡提示
+      // 避免在真正過關時打開商店
+      if(isLevelTransitioning && birdQueue.length === 0 && pigs.length === 0) return; 
+      document.getElementById('overlay').style.display = 'none'; 
       document.getElementById('shop-overlay').style.display = 'flex';
       renderShop();
     }
+    
     function closeShop() {
       document.getElementById('shop-overlay').style.display = 'none';
-      if(isLevelTransitioning && pigs.length > 0) {
-         checkLevelRules(); // 若是死掉狀態開商店，關閉後重新檢查判定
+      
+      // 修復 Bug：如果玩家沒買鳥就直接關閉商店，必須重新顯示死亡選單，否則畫面會卡死
+      if (isLevelTransitioning && pigs.length > 0 && birdQueue.length === 0 && isLaunched) {
+          showOverlay("💀 彈藥耗盡！", `你還有 ${coins} 枚金幣，要進商店買鳥逆轉嗎？`, 
+            [
+              { text: "🛒 打開鳥店", colorClass: "btn-yellow", action: () => openShop() },
+              { text: "重新挑戰", colorClass: "btn-red", action: () => loadLevel(currentLevel) },
+              { text: "回地圖", colorClass: "btn-blue", action: () => backToMap() }
+            ]
+          );
       }
     }
+    
     function renderShop() {
       const grid = document.getElementById('shop-grid');
       grid.innerHTML = '';
@@ -230,13 +240,14 @@
         `;
       }
     }
+    
     function buyBird(typeKey) {
       let b = BIRD_TYPES[typeKey];
       if (coins >= b.cost) {
         coins -= b.cost;
-        birdQueue.unshift(typeKey); // 插隊到下一個發射位置
-        isLevelTransitioning = false; // 解除死亡狀態
-        
+        birdQueue.unshift(typeKey); 
+        isLevelTransitioning = false; // 成功買鳥，解除死亡狀態
+
         if (!currentBird || isLaunched) {
             if (spawnTimeout) clearTimeout(spawnTimeout);
             spawnBird();
@@ -269,6 +280,7 @@
       }
       if (targetNode) setTimeout(() => { targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
     }
+    
     function backToMap() {
       clearGameWorld();
       document.getElementById('game-container').style.display = 'none';
@@ -277,6 +289,7 @@
       document.getElementById('map-screen').style.display = 'flex';
       renderMap();
     }
+    
     function enterLevel(idx) {
       document.getElementById('map-screen').style.display = 'none';
       document.getElementById('game-container').style.display = 'block';
@@ -324,14 +337,12 @@
         });
       });
 
-      // 觸發專屬技能
       canvas.addEventListener('pointerdown', () => {
         if (isLaunched && canSkill && currentBird && levelReady) {
           canSkill = false;
           const pos = currentBird.position;
           
           if (currentBird.bType === 'black') {
-             // 黑鳥核爆
              const bodies = Composite.allBodies(engine.world);
              bodies.forEach(b => {
                if (!b.isStatic) {
@@ -339,13 +350,11 @@
                  if (d < 180 && d > 0) Body.applyForce(b, b.position, Vector.mult(Vector.normalise(Vector.sub(b.position, pos)), 0.3 * (1 - d/180)));
                }
              });
-             currentBird.render.fillStyle = '#f1c40f'; // 爆炸發光
+             currentBird.render.fillStyle = '#f1c40f'; 
           } else if (currentBird.bType === 'yellow') {
-             // 黃鳥衝刺
              let norm = Vector.normalise(currentBird.velocity);
              Body.applyForce(currentBird, pos, Vector.mult(norm, 0.25));
           } else if (currentBird.bType === 'red') {
-             // 紅鳥微推進
              let norm = Vector.normalise(currentBird.velocity);
              Body.applyForce(currentBird, pos, Vector.mult(norm, 0.08));
           }
@@ -370,6 +379,7 @@
       const block = Bodies.rectangle(x, y, w, h, { density: density, friction: 0.5, render: { fillStyle: color, strokeStyle: '#111', lineWidth: 1 } });
       blocks.push(block); Composite.add(engine.world, block);
     }
+    
     function createPig(x, y, r, hp = 30) {
       const pig = Bodies.circle(x, y, r, { density: 0.001, friction: 0.3, restitution: 0.2, render: { fillStyle: '#2ecc71', strokeStyle: '#27ae60', lineWidth: 2 } });
       pig.hp = hp; pigs.push(pig); Composite.add(engine.world, pig);
@@ -388,7 +398,6 @@
           currentY -= 90; 
         }
       });
-      // 給予基本陣列的鳥，加上隨輪迴次數贈送的額外紅鳥
       let q = [...design.baseBirds];
       for(let i=0; i<loopCount; i++) q.push('red');
       return q;
@@ -404,7 +413,7 @@
         density: bData.density, friction: 0.2, restitution: bData.rest, collisionFilter: { category: BIRD_CATEGORY },
         render: { fillStyle: bData.color, strokeStyle: '#ecf0f1', lineWidth: 2 }
       });
-      currentBird.bType = typeKey; // 標記種類供技能判定
+      currentBird.bType = typeKey;
       allBirds.push(currentBird); 
 
       const sling = Constraint.create({ pointA: slingAnchor, bodyB: currentBird, stiffness: 0.06, length: 0, render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 } });
@@ -417,6 +426,7 @@
       });
       Composite.add(engine.world, [currentBird, sling]);
     }
+    
     function spawnNextBird() {
       if (pigs.length > 0 && birdQueue.length > 0 && !isLevelTransitioning) spawnBird();
     }
@@ -453,6 +463,13 @@
         if (speed < 0.1 || currentBird.position.x > WIDTH + 100 || currentBird.position.y > HEIGHT + 50) {
           isLevelTransitioning = true;
           setTimeout(() => {
+            
+            // 修復 Bug：確保在 1.5 秒的等待期間，如果玩家「已經手動買了鳥」，就立刻中斷死亡判定，避免死亡選單錯誤覆蓋遊戲畫面！
+            if (birdQueue.length > 0 || !isLaunched) {
+                isLevelTransitioning = false;
+                return;
+            }
+
             if (pigs.length > 0) {
                 showOverlay("💀 彈藥耗盡！", `你還有 ${coins} 枚金幣，要進商店買鳥逆轉嗎？`, 
                   [
@@ -461,12 +478,16 @@
                     { text: "回地圖", colorClass: "btn-blue", action: () => backToMap() }
                   ]
                 );
-            } else { isLevelTransitioning = false; }
+            } else { 
+               isLevelTransitioning = false; 
+            }
           }, 1500); 
         }
       }
     }
+    
     function restartLevel() { if (!isLevelTransitioning && levelReady) loadLevel(currentLevel); }
+    
     function updateUI() {
       document.getElementById('lvl-txt').textContent = `${currentLevel + 1}`;
       document.getElementById('birds-txt').textContent = birdQueue.length + (currentBird && !isLaunched ? 1 : 0);
