@@ -3,14 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>憤怒鳥：無盡探索地圖 (Infinite Map)</title>
+  <title>憤怒鳥：五大飛鳥商店無盡版</title>
   <style>
     * {
-      box-sizing: border-box;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-      touch-action: none;
+      box-sizing: border-box; -webkit-touch-callout: none;
+      -webkit-user-select: none; user-select: none; touch-action: none;
     }
     body {
       margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden;
@@ -37,11 +34,12 @@
       cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.5); white-space: nowrap; transition: transform 0.1s; border: none;
     }
     button:active { transform: scale(0.95); }
-    #btn-buy { background: #f1c40f; color: #333; border: 2px solid #d4ac0d; }
-    #btn-restart { background: #e74c3c; color: white; border: 2px solid #c0392b; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #btn-shop { background: #f1c40f; color: #333; border: 2px solid #d4ac0d; }
+    #btn-restart { background: #e74c3c; color: white; border: 2px solid #c0392b; transition: opacity 0.2s; }
     #btn-map { background: #3498db; color: white; border: 2px solid #2980b9; }
     
-    /* 遊戲畫布容器 */
+    /* 遊戲畫布 */
     #game-container {
       display: none; position: relative; width: 100%; max-width: 800px; aspect-ratio: 2 / 1;
       background: linear-gradient(to bottom, #1e3c72, #2a5298); border-radius: 12px;
@@ -49,7 +47,7 @@
     }
     canvas { width: 100%; height: 100%; display: block; }
 
-    /* 無盡地圖介面 */
+    /* 地圖介面 */
     #map-screen {
       position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
       background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460); z-index: 50;
@@ -62,64 +60,58 @@
     }
     .map-title { font-size: 24px; color: #00ffcc; font-weight: bold; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
     .map-coins { font-size: 18px; color: #f1c40f; font-weight: bold; }
-    
-    .level-grid {
-      display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%; max-width: 600px; padding-bottom: 50px;
-    }
+    .level-grid { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%; max-width: 600px; padding-bottom: 50px; }
     .level-btn {
       width: 75px; height: 75px; border-radius: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-      font-size: 22px; font-weight: bold; color: white; transition: all 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.5); position: relative;
+      font-size: 22px; font-weight: bold; color: white; transition: all 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
     }
     .level-locked { background: #34495e; opacity: 0.7; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
     .level-unlocked { background: #f1c40f; color: #333; cursor: pointer; border: 3px solid #fff; animation: pulse 2s infinite; }
     .level-cleared { background: #2ecc71; cursor: pointer; border: 2px solid #27ae60; }
     .level-num { font-size: 12px; margin-top: 4px; opacity: 0.8; }
-    
-    @keyframes pulse {
-      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.7); }
-      50% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(241, 196, 15, 0); }
-      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0); }
-    }
+    @keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.7); } 50% { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(241, 196, 15, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0); } }
 
-    /* 內建浮動視窗 UI */
-    #overlay {
+    /* 通用浮動視窗 (Overlay) */
+    .overlay-base {
       display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0, 0, 0, 0.75); z-index: 100; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.8); z-index: 100; flex-direction: column; align-items: center; justify-content: center;
     }
     .overlay-box {
       background: linear-gradient(135deg, #2c3e50, #34495e); padding: 25px 35px; border-radius: 15px;
-      border: 2px solid #00ffcc; text-align: center; box-shadow: 0 0 30px rgba(0, 255, 204, 0.4); color: white; min-width: 280px;
+      border: 2px solid #00ffcc; text-align: center; box-shadow: 0 0 30px rgba(0, 255, 204, 0.4); color: white; min-width: 280px; max-width: 90%;
     }
     .overlay-title { font-size: 22px; color: #f1c40f; margin-bottom: 15px; font-weight: bold; }
     .overlay-msg { font-size: 15px; margin-bottom: 25px; line-height: 1.6; white-space: pre-line; }
-    .overlay-btn { 
-      margin: 5px; padding: 10px 20px; border:none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; color: white;
+    .overlay-btn { margin: 5px; padding: 10px 20px; border:none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; color: white; }
+    
+    /* 商店專屬 UI */
+    .shop-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 20px; }
+    .bird-card {
+      background: rgba(0,0,0,0.5); border: 2px solid #7f8c8d; border-radius: 10px; padding: 10px;
+      width: 110px; display: flex; flex-direction: column; align-items: center; transition: 0.2s;
     }
-    .btn-green { background: #2ecc71; box-shadow: 0 4px #27ae60; }
-    .btn-green:active { transform: translateY(4px); box-shadow: 0 0 #27ae60; }
-    .btn-red { background: #e74c3c; box-shadow: 0 4px #c0392b; }
-    .btn-red:active { transform: translateY(4px); box-shadow: 0 0 #c0392b; }
-    .btn-yellow { background: #f1c40f; box-shadow: 0 4px #d4ac0d; color: #333; }
-    .btn-yellow:active { transform: translateY(4px); box-shadow: 0 0 #d4ac0d; }
-    .btn-blue { background: #3498db; box-shadow: 0 4px #2980b9; }
-    .btn-blue:active { transform: translateY(4px); box-shadow: 0 0 #2980b9; }
+    .bird-card:active { border-color: #f1c40f; }
+    .b-icon { border-radius: 50%; margin-bottom: 8px; box-shadow: inset -2px -2px 5px rgba(0,0,0,0.5); }
+    .b-name { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+    .b-desc { font-size: 11px; color: #bdc3c7; margin-bottom: 10px; height: 30px; }
+    
+    .btn-green { background: #2ecc71; box-shadow: 0 4px #27ae60; } .btn-green:active { transform: translateY(4px); box-shadow: 0 0 #27ae60; }
+    .btn-red { background: #e74c3c; box-shadow: 0 4px #c0392b; } .btn-red:active { transform: translateY(4px); box-shadow: 0 0 #c0392b; }
+    .btn-yellow { background: #f1c40f; box-shadow: 0 4px #d4ac0d; color: #333; } .btn-yellow:active { transform: translateY(4px); box-shadow: 0 0 #d4ac0d; }
+    .btn-blue { background: #3498db; box-shadow: 0 4px #2980b9; } .btn-blue:active { transform: translateY(4px); box-shadow: 0 0 #2980b9; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 </head>
 <body>
 
-  <!-- 無盡地圖介面 -->
   <div id="map-screen">
     <div class="map-header">
       <div class="map-title">無盡世界</div>
       <div class="map-coins">💰 <span id="map-coins-txt">0</span></div>
     </div>
-    <div class="level-grid" id="level-grid">
-      <!-- 關卡按鈕由 JS 動態生成 -->
-    </div>
+    <div class="level-grid" id="level-grid"></div>
   </div>
 
-  <!-- 遊戲內 UI -->
   <div id="ui-layer">
     <div class="hud-group">
       <div class="hud-text text-highlight">Lv <span id="lvl-txt">1</span></div>
@@ -127,19 +119,16 @@
       <div class="hud-text">🐦 <span id="birds-txt">3</span> | 🐷 <span id="pigs-txt">0</span></div>
     </div>
     <div class="btn-group">
-      <button id="btn-buy" onclick="buyBird()">買鳥(20)</button>
+      <button id="btn-shop" onclick="openShop()">🛒 鳥店</button>
       <button id="btn-restart" onclick="restartLevel()">重置</button>
       <button id="btn-map" onclick="backToMap()">地圖</button>
     </div>
   </div>
 
-  <!-- 遊戲畫布 -->
-  <div id="game-container">
-    <canvas id="canvas"></canvas>
-  </div>
+  <div id="game-container"><canvas id="canvas"></canvas></div>
 
-  <!-- 內建浮動視窗 UI -->
-  <div id="overlay">
+  <!-- 狀態提示框 -->
+  <div id="overlay" class="overlay-base">
     <div class="overlay-box">
       <div class="overlay-title" id="overlay-title">標題</div>
       <div class="overlay-msg" id="overlay-msg">內容</div>
@@ -147,34 +136,54 @@
     </div>
   </div>
 
+  <!-- 鳥店介面 -->
+  <div id="shop-overlay" class="overlay-base">
+    <div class="overlay-box" style="max-width: 600px;">
+      <div class="overlay-title">飛鳥商店 (擁有 💰 <span id="shop-coins"></span>)</div>
+      <div class="shop-grid" id="shop-grid"></div>
+      <button class="overlay-btn btn-blue" onclick="closeShop()">關閉商店</button>
+    </div>
+  </div>
+
   <script>
     const { Engine, Render, Runner, Bodies, Composite, Constraint, Mouse, MouseConstraint, Events, Body, Vector } = Matter;
 
     const canvas = document.getElementById('canvas');
-    const WIDTH = 800;
-    const HEIGHT = 400;
+    const WIDTH = 800; const HEIGHT = 400;
 
     let engine, render, mouseConstraint;
     let slingAnchor = { x: 120, y: 280 };
     
-    // 無盡地圖進度狀態
-    let unlockedLevel = 0; // 目前解鎖到第幾關 (0 = 關卡1)
-    let currentLevel = 0;
+    let unlockedLevel = 0; let currentLevel = 0;
+    let coins = 20; // 初始給點錢體驗
     
-    let birdsLeft = 3;
-    let coins = 0; 
-    const BIRD_COST = 20;
-
+    let birdQueue = []; // 玩家目前擁有的鳥序列
     let currentBird = null;
     let isLaunched = false;
-    let pigs = [];
-    let blocks = [];
-    let allBirds = []; 
+    let pigs = []; let blocks = []; let allBirds = []; 
+    
     let canSkill = false;
     let isLevelTransitioning = false; 
+    let levelReady = false; 
     let spawnTimeout = null; 
-
     const BIRD_CATEGORY = 0x0002;
+
+    // 定義五種鳥類
+    const BIRD_TYPES = {
+      red: { name: '紅鳥', cost: 20, color: '#e74c3c', r: 14, density: 0.005, rest: 0.4, desc: '平衡型 / 微推進' },
+      blue: { name: '藍鳥', cost: 15, color: '#3498db', r: 10, density: 0.003, rest: 0.9, desc: '輕巧 / 高彈力' },
+      yellow: { name: '黃鳥', cost: 30, color: '#f1c40f', r: 13, density: 0.008, rest: 0.2, desc: '高密度 / 衝刺穿透' },
+      black: { name: '炸彈黑', cost: 50, color: '#2c3e50', r: 16, density: 0.012, rest: 0.2, desc: '點擊 / 大範圍核爆' },
+      big: { name: '大胖紅', cost: 60, color: '#8e44ad', r: 24, density: 0.03, rest: 0.1, desc: '極重 / 純粹破壞力' }
+    };
+
+    const LEVEL_DESIGNS = [
+      { baseBirds: ['red','red','red'], towers: [ { x: 500, h: 2, mat: 'wood' }, { x: 650, h: 2, mat: 'wood' } ] },
+      { baseBirds: ['red','blue','red'], towers: [ { x: 450, h: 3, mat: 'wood' }, { x: 580, h: 2, mat: 'stone' }, { x: 710, h: 1, mat: 'wood' } ] },
+      { baseBirds: ['yellow','red','red'], towers: [ { x: 480, h: 1, mat: 'steel' }, { x: 620, h: 4, mat: 'wood' } ] },
+      { baseBirds: ['black','blue','red'], towers: [ { x: 400, h: 2, mat: 'stone' }, { x: 530, h: 3, mat: 'stone' }, { x: 660, h: 2, mat: 'stone' } ] },
+      { baseBirds: ['big','yellow','red'], towers: [ { x: 450, h: 4, mat: 'steel' }, { x: 650, h: 4, mat: 'steel' } ] }
+    ];
 
     function showOverlay(title, msg, buttons) {
       document.getElementById('overlay-title').textContent = title;
@@ -185,100 +194,118 @@
         const btn = document.createElement('button');
         btn.className = `overlay-btn ${b.colorClass || 'btn-green'}`;
         btn.textContent = b.text;
-        btn.onclick = () => {
-          document.getElementById('overlay').style.display = 'none';
-          b.action();
-        };
+        btn.onclick = () => { document.getElementById('overlay').style.display = 'none'; b.action(); };
         btnContainer.appendChild(btn);
       });
       document.getElementById('overlay').style.display = 'flex';
     }
 
-    // 無盡地圖生成系統
+    // --- 商店系統 ---
+    function openShop() {
+      if(isLevelTransitioning && birdQueue.length === 0 && pigs.length === 0) return; // 已贏不能買
+      document.getElementById('overlay').style.display = 'none'; // 隱藏死亡提示
+      document.getElementById('shop-overlay').style.display = 'flex';
+      renderShop();
+    }
+    function closeShop() {
+      document.getElementById('shop-overlay').style.display = 'none';
+      if(isLevelTransitioning && pigs.length > 0) {
+         checkLevelRules(); // 若是死掉狀態開商店，關閉後重新檢查判定
+      }
+    }
+    function renderShop() {
+      const grid = document.getElementById('shop-grid');
+      grid.innerHTML = '';
+      document.getElementById('shop-coins').innerText = coins;
+      for(let key in BIRD_TYPES) {
+        let b = BIRD_TYPES[key];
+        let canBuy = coins >= b.cost;
+        grid.innerHTML += `
+          <div class="bird-card" style="opacity: ${canBuy ? 1 : 0.6}">
+            <div class="b-icon" style="background: ${b.color}; width: ${b.r*2}px; height: ${b.r*2}px;"></div>
+            <div class="b-name">${b.name}</div>
+            <div class="b-desc">${b.desc}</div>
+            <button class="btn-yellow" style="padding: 4px 12px; font-size:13px;" onclick="buyBird('${key}')" ${canBuy?'':'disabled'}>${b.cost} 💰</button>
+          </div>
+        `;
+      }
+    }
+    function buyBird(typeKey) {
+      let b = BIRD_TYPES[typeKey];
+      if (coins >= b.cost) {
+        coins -= b.cost;
+        birdQueue.unshift(typeKey); // 插隊到下一個發射位置
+        isLevelTransitioning = false; // 解除死亡狀態
+        
+        if (!currentBird || isLaunched) {
+            if (spawnTimeout) clearTimeout(spawnTimeout);
+            spawnBird();
+        }
+        updateUI(); renderShop();
+      }
+    }
+
+    // --- 地圖系統 ---
     function renderMap() {
       document.getElementById('map-coins-txt').textContent = coins;
       const grid = document.getElementById('level-grid');
       grid.innerHTML = '';
-      
-      // 動態決定要顯示多少關卡（至少顯示 15 關，或目前解鎖關卡 + 6）
       const visibleLevels = Math.max(15, unlockedLevel + 6);
       let targetNode = null;
 
       for (let i = 0; i < visibleLevels; i++) {
         const btn = document.createElement('div');
         btn.className = 'level-btn ';
-        
         const numSpan = `<div class="level-num">Level ${i + 1}</div>`;
-
         if (i < unlockedLevel) {
-          btn.className += 'level-cleared';
-          btn.innerHTML = `✔️${numSpan}`;
-          btn.onclick = () => enterLevel(i);
+          btn.className += 'level-cleared'; btn.innerHTML = `✔️${numSpan}`; btn.onclick = () => enterLevel(i);
         } else if (i === unlockedLevel) {
-          btn.className += 'level-unlocked';
-          btn.innerHTML = `⭐${numSpan}`;
-          btn.onclick = () => enterLevel(i);
-          targetNode = btn; // 記住最新解鎖的節點
+          btn.className += 'level-unlocked'; btn.innerHTML = `⭐${numSpan}`; btn.onclick = () => enterLevel(i);
+          targetNode = btn; 
         } else {
-          btn.className += 'level-locked';
-          btn.innerHTML = `🔒${numSpan}`;
+          btn.className += 'level-locked'; btn.innerHTML = `🔒${numSpan}`;
         }
         grid.appendChild(btn);
       }
-
-      // 自動將畫面捲動對焦到最新進度
-      if (targetNode) {
-        setTimeout(() => {
-          targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
-      }
+      if (targetNode) setTimeout(() => { targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
     }
-
     function backToMap() {
       clearGameWorld();
       document.getElementById('game-container').style.display = 'none';
       document.getElementById('ui-layer').style.display = 'none';
+      document.getElementById('overlay').style.display = 'none';
       document.getElementById('map-screen').style.display = 'flex';
       renderMap();
     }
-
     function enterLevel(idx) {
       document.getElementById('map-screen').style.display = 'none';
       document.getElementById('game-container').style.display = 'block';
       document.getElementById('ui-layer').style.display = 'flex';
-      
       if(!engine) initEngine(); 
       loadLevel(idx);
     }
 
+    // --- 物理引擎 ---
     function initEngine() {
       engine = Engine.create({ gravity: { x: 0, y: 1.1 } }); 
-      canvas.width = WIDTH;
-      canvas.height = HEIGHT;
+      canvas.width = WIDTH; canvas.height = HEIGHT;
+      render = Render.create({ canvas: canvas, engine: engine, options: { width: WIDTH, height: HEIGHT, wireframes: false, background: 'transparent' } });
+      Runner.run(Runner.create(), engine); Render.run(render);
 
-      render = Render.create({
-        canvas: canvas,
-        engine: engine,
-        options: { width: WIDTH, height: HEIGHT, wireframes: false, background: 'transparent' }
-      });
-
-      Runner.run(Runner.create(), engine);
-      Render.run(render);
+      const ground = Bodies.rectangle(400, 370, 800, 40, { isStatic: true, render: { fillStyle: '#2d3436' } });
+      const leftWall = Bodies.rectangle(-20, 200, 40, 400, { isStatic: true });
+      const rightWall = Bodies.rectangle(820, 200, 40, 400, { isStatic: true });
+      Composite.add(engine.world, [ground, leftWall, rightWall]);
 
       const mouse = Mouse.create(render.canvas);
-      mouseConstraint = MouseConstraint.create(engine, {
-        mouse: mouse,
-        constraint: { stiffness: 0.1, render: { visible: false } },
-        collisionFilter: { mask: BIRD_CATEGORY }
-      });
+      mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } }, collisionFilter: { mask: BIRD_CATEGORY } });
       Composite.add(engine.world, mouseConstraint);
 
       Events.on(mouseConstraint, 'enddrag', (e) => {
-        if (e.body === currentBird && !isLaunched) {
+        if (e.body === currentBird && !isLaunched && levelReady) {
           const dist = Vector.magnitude(Vector.sub(currentBird.position, slingAnchor));
           if (dist > 15) {
-            isLaunched = true;
-            canSkill = true;
+            isLaunched = true; canSkill = true;
             if (spawnTimeout) clearTimeout(spawnTimeout);
             spawnTimeout = setTimeout(spawnNextBird, 4000);
           }
@@ -286,271 +313,168 @@
       });
 
       Events.on(engine, 'collisionStart', (e) => {
+        if (!levelReady) return; 
         e.pairs.forEach(pair => {
           pigs.forEach(pig => {
             if (pair.bodyA === pig || pair.bodyB === pig) {
-              const speedA = Vector.magnitude(pair.bodyA.velocity);
-              const speedB = Vector.magnitude(pair.bodyB.velocity);
-              const maxSpeed = Math.max(speedA, speedB);
-              if (maxSpeed > 1.8) pig.hp -= maxSpeed * 15; 
+              const speedA = Vector.magnitude(pair.bodyA.velocity); const speedB = Vector.magnitude(pair.bodyB.velocity);
+              if (Math.max(speedA, speedB) > 1.8) pig.hp -= Math.max(speedA, speedB) * 15; 
             }
           });
         });
       });
 
+      // 觸發專屬技能
       canvas.addEventListener('pointerdown', () => {
-        if (isLaunched && canSkill && currentBird) {
+        if (isLaunched && canSkill && currentBird && levelReady) {
           canSkill = false;
           const pos = currentBird.position;
-          const bodies = Composite.allBodies(engine.world);
-          bodies.forEach(b => {
-            if (!b.isStatic) {
-              const d = Vector.magnitude(Vector.sub(b.position, pos));
-              if (d < 160 && d > 0) {
-                const force = Vector.mult(Vector.normalise(Vector.sub(b.position, pos)), 0.22 * (1 - d / 160));
-                Body.applyForce(b, b.position, force);
-              }
-            }
-          });
-          currentBird.render.fillStyle = '#f1c40f'; 
+          
+          if (currentBird.bType === 'black') {
+             // 黑鳥核爆
+             const bodies = Composite.allBodies(engine.world);
+             bodies.forEach(b => {
+               if (!b.isStatic) {
+                 const d = Vector.magnitude(Vector.sub(b.position, pos));
+                 if (d < 180 && d > 0) Body.applyForce(b, b.position, Vector.mult(Vector.normalise(Vector.sub(b.position, pos)), 0.3 * (1 - d/180)));
+               }
+             });
+             currentBird.render.fillStyle = '#f1c40f'; // 爆炸發光
+          } else if (currentBird.bType === 'yellow') {
+             // 黃鳥衝刺
+             let norm = Vector.normalise(currentBird.velocity);
+             Body.applyForce(currentBird, pos, Vector.mult(norm, 0.25));
+          } else if (currentBird.bType === 'red') {
+             // 紅鳥微推進
+             let norm = Vector.normalise(currentBird.velocity);
+             Body.applyForce(currentBird, pos, Vector.mult(norm, 0.08));
+          }
         }
       });
 
       Events.on(engine, 'beforeUpdate', () => {
         for (let i = pigs.length - 1; i >= 0; i--) {
           if (pigs[i].hp <= 0 || pigs[i].position.y > HEIGHT) {
-            Composite.remove(engine.world, pigs[i]);
-            pigs.splice(i, 1);
+            Composite.remove(engine.world, pigs[i]); pigs.splice(i, 1);
           }
         }
         if(document.getElementById('game-container').style.display !== 'none') {
-          updateUI();
-          checkLevelRules();
+          updateUI(); checkLevelRules();
         }
       });
     }
 
     function createBlock(x, y, w, h, type = 'wood') {
-      let color, density, friction;
-      if (type === 'steel') { color = '#34495e'; density = 0.02; friction = 0.6; } 
-      else if (type === 'stone') { color = '#95a5a6'; density = 0.005; friction = 0.5; } 
-      else { color = '#d35400'; density = 0.001; friction = 0.4; }
-
-      const block = Bodies.rectangle(x, y, w, h, {
-        density: density, friction: friction,
-        render: { fillStyle: color, strokeStyle: '#111', lineWidth: 1 }
-      });
-      blocks.push(block);
-      Composite.add(engine.world, block);
+      let color = type==='steel'?'#34495e':(type==='stone'?'#95a5a6':'#d35400');
+      let density = type==='steel'?0.02:(type==='stone'?0.005:0.001);
+      const block = Bodies.rectangle(x, y, w, h, { density: density, friction: 0.5, render: { fillStyle: color, strokeStyle: '#111', lineWidth: 1 } });
+      blocks.push(block); Composite.add(engine.world, block);
     }
-
     function createPig(x, y, r, hp = 30) {
-      const pig = Bodies.circle(x, y, r, {
-        density: 0.001, friction: 0.3, restitution: 0.2,
-        render: { fillStyle: '#2ecc71', strokeStyle: '#27ae60', lineWidth: 2 }
-      });
-      pig.hp = hp;
-      pigs.push(pig);
-      Composite.add(engine.world, pig);
+      const pig = Bodies.circle(x, y, r, { density: 0.001, friction: 0.3, restitution: 0.2, render: { fillStyle: '#2ecc71', strokeStyle: '#27ae60', lineWidth: 2 } });
+      pig.hp = hp; pigs.push(pig); Composite.add(engine.world, pig);
     }
 
-    // 依據關卡深度動態生成無盡陣型
     function generateLevel(levelIdx) {
-      let numTowers = Math.min(2 + Math.floor(levelIdx / 4), 5);
-      let maxTowerHeight = Math.min(2 + Math.floor(levelIdx / 5), 5);
-      let materials = ['wood', 'wood'];
-      
-      // 隨層數深入，鋼鐵與石頭機率增加
-      if (levelIdx >= 2) materials.push('stone');
-      if (levelIdx >= 5) materials.push('steel');
-      if (levelIdx >= 10) materials.push('steel', 'stone');
-      if (levelIdx >= 20) materials.push('steel', 'steel');
+      let designIdx = levelIdx % LEVEL_DESIGNS.length;
+      let loopCount = Math.floor(levelIdx / LEVEL_DESIGNS.length);
+      let design = LEVEL_DESIGNS[designIdx];
 
-      let startX = 350 + (Math.random() * 50);
-      let spacing = Math.max(70, 100 - (levelIdx * 0.5)); // 越後面蓋越密集
-
-      for (let i = 0; i < numTowers; i++) {
-        let towerX = startX + i * spacing;
-        if (towerX > 760) break;
+      design.towers.forEach(t => {
         let currentY = 350;
-        let tHeight = 1 + Math.floor(Math.random() * maxTowerHeight);
-        
-        for (let h = 0; h < tHeight; h++) {
-          let mat = materials[Math.floor(Math.random() * materials.length)];
-          createBlock(towerX, currentY - 40, 15, 80, mat);
-          createBlock(towerX + 50, currentY - 40, 15, 80, mat);
-          createBlock(towerX + 25, currentY - 85, 90, 15, mat);
-          
-          if (Math.random() > 0.3 || h === tHeight - 1) {
-            createPig(towerX + 25, currentY - 40, 14, 30 + (levelIdx * 8)); // 豬的血量無盡成長
-          }
+        for (let h = 0; h < t.h; h++) {
+          createBlock(t.x, currentY - 40, 15, 80, t.mat); createBlock(t.x + 50, currentY - 40, 15, 80, t.mat); createBlock(t.x + 25, currentY - 85, 90, 15, t.mat);
+          if (h === t.h - 1 || (h % 2 === 0)) createPig(t.x + 25, currentY - 40, 14, 30 + (levelIdx * 10)); 
           currentY -= 90; 
         }
-      }
-      
-      if (pigs.length === 0) createPig(600, 330, 20, 50);
-      
-      // 動態給予小鳥數量
-      return Math.min(3 + Math.floor(pigs.length / 2), 7);
+      });
+      // 給予基本陣列的鳥，加上隨輪迴次數贈送的額外紅鳥
+      let q = [...design.baseBirds];
+      for(let i=0; i<loopCount; i++) q.push('red');
+      return q;
     }
 
     function spawnBird() {
-      if (birdsLeft <= 0) return;
-      birdsLeft--;
-      isLaunched = false;
-      canSkill = false;
-
-      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, 14, {
-        density: 0.005, friction: 0.2, restitution: 0.4,
-        collisionFilter: { category: BIRD_CATEGORY },
-        render: { fillStyle: '#ff3333' }
+      if (birdQueue.length === 0) return;
+      let typeKey = birdQueue.shift();
+      let bData = BIRD_TYPES[typeKey];
+      
+      isLaunched = false; canSkill = false;
+      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, bData.r, {
+        density: bData.density, friction: 0.2, restitution: bData.rest, collisionFilter: { category: BIRD_CATEGORY },
+        render: { fillStyle: bData.color, strokeStyle: '#ecf0f1', lineWidth: 2 }
       });
+      currentBird.bType = typeKey; // 標記種類供技能判定
       allBirds.push(currentBird); 
 
-      const sling = Constraint.create({
-        pointA: slingAnchor, bodyB: currentBird, stiffness: 0.06, length: 0,
-        render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 }
-      });
-
+      const sling = Constraint.create({ pointA: slingAnchor, bodyB: currentBird, stiffness: 0.06, length: 0, render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 } });
       Events.on(engine, 'afterUpdate', function releaseHandler() {
         if (isLaunched && sling.bodyB) {
-          const dist = Vector.magnitude(Vector.sub(currentBird.position, slingAnchor));
-          if (dist < 15 || currentBird.position.x > slingAnchor.x + 10) {
-            sling.bodyB = null;
-            Composite.remove(engine.world, sling);
-            Events.off(engine, 'afterUpdate', releaseHandler);
+          if (Vector.magnitude(Vector.sub(currentBird.position, slingAnchor)) < 15 || currentBird.position.x > slingAnchor.x + 10) {
+            sling.bodyB = null; Composite.remove(engine.world, sling); Events.off(engine, 'afterUpdate', releaseHandler);
           }
         }
       });
       Composite.add(engine.world, [currentBird, sling]);
     }
-
     function spawnNextBird() {
-      if (pigs.length > 0 && birdsLeft > 0 && !isLevelTransitioning) spawnBird();
-    }
-
-    function buyBird() {
-      if (isLevelTransitioning) return;
-      if (coins >= BIRD_COST) {
-        coins -= BIRD_COST;
-        birdsLeft++;
-        if (!currentBird || isLaunched) {
-            if (spawnTimeout) clearTimeout(spawnTimeout);
-            spawnBird();
-        }
-        updateUI();
-      } else {
-        showOverlay("金幣不足", `買一隻鳥需要 ${BIRD_COST} 枚金幣，再去賺點錢吧！`, [
-          { text: "確認", colorClass: "btn-red", action: () => {} }
-        ]);
-      }
+      if (pigs.length > 0 && birdQueue.length > 0 && !isLevelTransitioning) spawnBird();
     }
 
     function clearGameWorld() {
       if (spawnTimeout) clearTimeout(spawnTimeout);
-      pigs.forEach(p => Composite.remove(engine.world, p));
-      blocks.forEach(b => Composite.remove(engine.world, b));
-      allBirds.forEach(b => Composite.remove(engine.world, b));
-      
-      const allBodies = Composite.allBodies(engine.world);
-      allBodies.forEach(body => {
-         if(body.isStatic) Composite.remove(engine.world, body);
-      });
-      
+      pigs.forEach(p => Composite.remove(engine.world, p)); blocks.forEach(b => Composite.remove(engine.world, b)); allBirds.forEach(b => Composite.remove(engine.world, b));
       pigs = []; blocks = []; allBirds = [];
     }
 
     function loadLevel(idx) {
-      isLevelTransitioning = true; 
-      currentLevel = idx;
-
+      isLevelTransitioning = true; levelReady = false; currentLevel = idx;
       clearGameWorld();
-      
-      const ground = Bodies.rectangle(400, 370, 800, 40, { isStatic: true, render: { fillStyle: '#2d3436' } });
-      const leftWall = Bodies.rectangle(-20, 200, 40, 400, { isStatic: true });
-      const rightWall = Bodies.rectangle(820, 200, 40, 400, { isStatic: true });
-      Composite.add(engine.world, [ground, leftWall, rightWall]);
-
-      birdsLeft = generateLevel(currentLevel);
+      birdQueue = generateLevel(currentLevel);
       spawnBird();
-
-      setTimeout(() => { isLevelTransitioning = false; }, 800);
+      setTimeout(() => { isLevelTransitioning = false; levelReady = true; }, 1000);
     }
 
     function checkLevelRules() {
-      if (isLevelTransitioning) return;
+      if (isLevelTransitioning || !levelReady) return;
 
       if (pigs.length === 0) {
         isLevelTransitioning = true;
-        
-        // 紀錄進度解鎖：無盡疊加
-        if (currentLevel === unlockedLevel) {
-            unlockedLevel++;
-        }
-
+        if (currentLevel === unlockedLevel) unlockedLevel++;
         setTimeout(() => {
-          let birdBonus = birdsLeft * 5;
-          let totalReward = 10 + birdBonus;
-          coins += totalReward;
-          
-          showOverlay("🎉 關卡完成！", `恭喜突破 Level ${currentLevel + 1}\n\n基礎獎勵: +10 金幣\n節省獎勵: +${birdBonus} 金幣\n總計獲得: ${totalReward} 金幣！`, 
-            [
-              { text: "前往下一關", colorClass: "btn-green", action: () => loadLevel(currentLevel + 1) },
-              { text: "回世界地圖", colorClass: "btn-blue", action: () => backToMap() }
-            ]
+          let birdBonus = birdQueue.length * 5; let totalReward = 15 + birdBonus; coins += totalReward;
+          showOverlay("🎉 關卡完成！", `基礎獎勵: +15 金幣\n節省鳥類: +${birdBonus} 金幣\n總計獲得: ${totalReward} 金幣！`, 
+            [ { text: "下一關", colorClass: "btn-green", action: () => loadLevel(currentLevel + 1) }, { text: "回地圖", colorClass: "btn-blue", action: () => backToMap() } ]
           );
         }, 800); 
       } 
-      else if (birdsLeft === 0 && isLaunched && pigs.length > 0 && currentBird) {
+      else if (birdQueue.length === 0 && isLaunched && pigs.length > 0 && currentBird) {
         const speed = Vector.magnitude(currentBird.velocity);
-        const outOfBounds = currentBird.position.x > WIDTH + 100 || currentBird.position.y > HEIGHT + 50;
-        
-        if (speed < 0.1 || outOfBounds) {
+        if (speed < 0.1 || currentBird.position.x > WIDTH + 100 || currentBird.position.y > HEIGHT + 50) {
           isLevelTransitioning = true;
           setTimeout(() => {
             if (pigs.length > 0) {
-              if (coins >= BIRD_COST) {
-                  showOverlay("💀 彈藥耗盡！", `你還有 ${coins} 枚金幣。\n要花費 ${BIRD_COST} 枚金幣買鳥續命嗎？`, 
-                    [
-                      { text: "買鳥續命", colorClass: "btn-yellow", action: () => { isLevelTransitioning = false; buyBird(); } },
-                      { text: "重新挑戰", colorClass: "btn-red", action: () => loadLevel(currentLevel) },
-                      { text: "回世界地圖", colorClass: "btn-blue", action: () => backToMap() }
-                    ]
-                  );
-              } else {
-                  showOverlay("💀 挑戰失敗！", `鳥用光了，金幣也不夠買鳥了！\n請重新嘗試...`, 
-                    [
-                      { text: "重新挑戰", colorClass: "btn-red", action: () => loadLevel(currentLevel) },
-                      { text: "回世界地圖", colorClass: "btn-blue", action: () => backToMap() }
-                    ]
-                  );
-              }
-            } else {
-               isLevelTransitioning = false; 
-            }
+                showOverlay("💀 彈藥耗盡！", `你還有 ${coins} 枚金幣，要進商店買鳥逆轉嗎？`, 
+                  [
+                    { text: "🛒 打開鳥店", colorClass: "btn-yellow", action: () => openShop() },
+                    { text: "重新挑戰", colorClass: "btn-red", action: () => loadLevel(currentLevel) },
+                    { text: "回地圖", colorClass: "btn-blue", action: () => backToMap() }
+                  ]
+                );
+            } else { isLevelTransitioning = false; }
           }, 1500); 
         }
       }
     }
-
-    function restartLevel() {
-      if (!isLevelTransitioning) loadLevel(currentLevel);
-    }
-
+    function restartLevel() { if (!isLevelTransitioning && levelReady) loadLevel(currentLevel); }
     function updateUI() {
       document.getElementById('lvl-txt').textContent = `${currentLevel + 1}`;
-      let actualBirds = birdsLeft + (currentBird && !isLaunched ? 1 : 0);
-      document.getElementById('birds-txt').textContent = actualBirds;
+      document.getElementById('birds-txt').textContent = birdQueue.length + (currentBird && !isLaunched ? 1 : 0);
       document.getElementById('pigs-txt').textContent = pigs.length;
       document.getElementById('coins-txt').textContent = coins;
-      
-      const buyBtn = document.getElementById('btn-buy');
-      buyBtn.style.opacity = coins >= BIRD_COST ? "1" : "0.5";
+      document.getElementById('btn-restart').style.opacity = (!levelReady || isLevelTransitioning) ? "0.5" : "1";
     }
-
-    window.onload = () => {
-      renderMap();
-    };
+    window.onload = () => { renderMap(); };
   </script>
 </body>
 </html>
