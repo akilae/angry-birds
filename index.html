@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>憤怒鳥：遠端連線完整版 (By 李御銘)</title>
+  <title>憤怒鳥：絕對出鳥完整版 (By 李御銘)</title>
   <style>
     * { box-sizing: border-box; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
     body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: none; }
@@ -13,7 +13,6 @@
     .hud-text:last-child { margin-bottom: 0; }
     .highlight { color: #f1c40f; font-size: 16px; }
     .rival-text { color: #e74c3c; font-size: 13px; display: none; margin-bottom: 4px; font-weight: bold;}
-    #turn-indicator { padding: 4px 10px; border-radius: 6px; font-size: 13px; margin-top: 5px; background: rgba(231, 76, 60, 0.9); transition: background 0.3s; border: 1px solid white; text-align: center; display: none; color:white; font-weight:bold; }
     .btn-group { display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
     button { padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.5); white-space: nowrap; transition: transform 0.1s; border: none; }
     button:active { transform: scale(0.95); }
@@ -64,9 +63,8 @@
   <div id="main-menu" class="overlay-base">
     <div class="overlay-box" style="padding: 40px 30px;">
       <div class="overlay-title" style="font-size: 36px;">憤怒鳥</div>
-      <div class="overlay-msg" style="margin-bottom: 30px;">選擇你的遊玩模式</div>
-      <button class="overlay-btn btn-green" onclick="startGameMode('1p')">👤 單人推圖</button>
-      <button class="overlay-btn btn-purple" onclick="startGameMode('2p')">👥 同機雙人</button>
+      <div class="overlay-msg" style="margin-bottom: 30px;">開始你的冒險旅程</div>
+      <button class="overlay-btn btn-green" onclick="startGame()">▶ 開始單人闖關</button>
       <div style="font-size: 14px; color: #bdc3c7; margin-top: 25px; letter-spacing: 1px;">作者：李御銘</div>
     </div>
   </div>
@@ -97,7 +95,6 @@
       <div class="rival-text" id="rival-indicator">⚔️ 對手: <span id="rival-txt">0</span></div>
       <div class="hud-text">💰 <span id="coins-txt" class="highlight">0</span></div>
       <div class="hud-text">🐦 <span id="birds-txt">3</span> | 🐷 <span id="pigs-txt">0</span></div>
-      <div id="turn-indicator">🎮 1P 回合</div>
     </div>
     <div class="btn-group">
       <button class="btn-fs" onclick="toggleFullScreen()">📱 全螢幕</button>
@@ -134,16 +131,13 @@
 
     let engine, render;
     let slingAnchor = { x: 130, y: 280 };
-    let gameMode = '1p', unlockedLevel = 0, currentLevel = 0, currentMapPage = 0, coins = 100, currentPlayer = 1;
+    let unlockedLevel = 0, currentLevel = 0, currentMapPage = 0, coins = 100;
     let birdQueue = [], currentBird = null, isLaunched = false, currentSling = null;
     let pigs = [], blocks = [], allBirds = [], customConstraints = [];
     let canSkill = false, isLevelTransitioning = false, levelReady = false, spawnTimeout = null;
     let isDragging = false; 
 
-    // 連線挑戰系統變數
-    let isChallengeMode = false;
-    let rivalScore = 0;
-    let myScore = 0;
+    let isChallengeMode = false, rivalScore = 0, myScore = 0;
 
     const BIRD_TYPES = {
       red: { name: '紅鳥', cost: 20, color: '#e74c3c', r: 14, density: 0.005, rest: 0.4, desc: '平衡型 / 微推進' },
@@ -164,9 +158,18 @@
       { b: ['big','black','yellow','red'], cb: (l) => { createBlock(450,300,30,140,'steel'); createBlock(650,300,30,140,'steel'); createBlock(550,220,260,25,'steel'); createBlock(500,140,20,140,'stone'); createBlock(600,140,20,140,'stone'); createBlock(550,60,160,20,'stone'); createPig(550,320,35,100+l*20); createPig(550,180,20,50+l*10); } }
     ];
 
-    function toggleFullScreen() { if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => console.log(err)); } else { if (document.exitFullscreen) document.exitFullscreen(); } }
+    function toggleFullScreen() { 
+      let doc = window.document; let docEl = doc.documentElement;
+      let requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+      let cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+      if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+        if (requestFullScreen) requestFullScreen.call(docEl).catch(err => { alert("目前瀏覽器不支援全螢幕功能，請直接將手機橫放即可獲得完美體驗！"); });
+        else alert("iPhone 或此瀏覽器無法強制全螢幕，請直接將手機橫放遊玩！");
+      } else {
+        if (cancelFullScreen) cancelFullScreen.call(doc);
+      }
+    }
     
-    // URL 解析挑戰參數
     function parseURLChallenge() {
       try {
         const params = new URLSearchParams(window.location.search);
@@ -174,16 +177,13 @@
           let lvl = parseInt(params.get('level'));
           let sc = parseInt(params.get('score'));
           if (!isNaN(lvl) && !isNaN(sc)) {
-            isChallengeMode = true;
-            rivalScore = sc;
-            currentLevel = lvl;
-            gameMode = '1p'; // 挑戰模式預設為單人
+            isChallengeMode = true; rivalScore = sc; currentLevel = lvl; 
             document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('btn-map-return').style.display = 'none'; // 挑戰模式隱藏回地圖
+            document.getElementById('btn-map-return').style.display = 'none'; 
             document.getElementById('rival-indicator').style.display = 'block';
             document.getElementById('rival-txt').textContent = rivalScore;
             
-            showOverlay("⚔️ 收到遠端挑戰帖！", `你的朋友在 Level ${lvl+1} 打出了 ${sc} 分！\n你有把握超越他嗎？`, [
+            showOverlay("⚔️ 收到遠端挑戰帖！", `朋友在 Level ${lvl+1} 打出了 ${sc} 分！\n你有把握超越他嗎？`, [
               { text: "🔥 接受挑戰！", colorClass: "btn-restart", action: () => {
                 if (!engine) initEngine();
                 document.getElementById('game-container').style.display = 'flex';
@@ -201,18 +201,22 @@
     function shareChallengeLink() {
       const baseUrl = window.location.origin + window.location.pathname;
       const shareUrl = `${baseUrl}?challenge=1&level=${currentLevel}&score=${myScore}`;
-      if (navigator.clipboard && window.isSecureContext) {
+      const shareText = `我在第 ${currentLevel + 1} 關打出了 ${myScore} 分！你能打破我的紀錄嗎？`;
+
+      if (navigator.share) {
+        navigator.share({ title: '憤怒鳥挑戰帖！', text: shareText, url: shareUrl })
+          .catch((error) => console.log('分享被取消或出現錯誤', error));
+      } else if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(shareUrl).then(() => {
-          alert('🔗 挑戰網址已複製！\n快傳給朋友，看誰能打破你在這關的紀錄！\n\n' + shareUrl);
+          alert('🔗 挑戰網址已複製！\n快貼上傳給朋友，看誰能打破你的紀錄！\n\n' + shareUrl);
         }).catch(() => { prompt('請手動複製以下網址傳給朋友：', shareUrl); });
       } else {
         prompt('請手動複製以下網址傳給朋友：', shareUrl);
       }
     }
 
-    function startGameMode(mode) {
-      gameMode = mode; document.getElementById('main-menu').style.display = 'none';
-      document.getElementById('map-title-txt').textContent = mode === '1p' ? "單人世界地圖" : "雙人世界地圖";
+    function startGame() {
+      document.getElementById('main-menu').style.display = 'none';
       currentMapPage = Math.floor(unlockedLevel / LEVELS_PER_MAP);
       renderMap(); document.getElementById('map-screen').style.display = 'flex';
       if (!engine) initEngine();
@@ -223,25 +227,6 @@
       const c = document.getElementById('overlay-btns'); c.innerHTML = '';
       buttons.forEach(b => { const btn = document.createElement('button'); btn.className = `overlay-btn ${b.colorClass || 'btn-green'}`; btn.textContent = b.text; btn.onclick = () => { document.getElementById('overlay').style.display = 'none'; b.action(); }; c.appendChild(btn); });
       document.getElementById('overlay').style.display = 'flex';
-    }
-
-    function showTurnBanner(playerNum, callback) {
-      const banner = document.createElement('div');
-      banner.style.position = 'fixed'; banner.style.top = '50%'; banner.style.left = '50%';
-      banner.style.transform = 'translate(-50%, -50%) scale(0.5)';
-      banner.style.background = playerNum === 1 ? 'rgba(231, 76, 60, 0.95)' : 'rgba(52, 152, 219, 0.95)';
-      banner.style.color = 'white'; banner.style.padding = '20px 50px'; banner.style.borderRadius = '20px';
-      banner.style.fontSize = '36px'; banner.style.fontWeight = 'bold'; banner.style.zIndex = '300';
-      banner.style.boxShadow = '0 10px 30px rgba(0,0,0,0.6)'; banner.style.border = '4px solid white';
-      banner.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; banner.style.opacity = '0';
-      banner.innerText = `🎮 ${playerNum}P 回合`;
-      document.body.appendChild(banner);
-
-      setTimeout(() => { banner.style.opacity = '1'; banner.style.transform = 'translate(-50%, -50%) scale(1)'; }, 50);
-      setTimeout(() => {
-          banner.style.opacity = '0'; banner.style.transform = 'translate(-50%, -50%) scale(1.2)';
-          setTimeout(() => { document.body.removeChild(banner); if (callback) callback(); }, 400);
-      }, 1200);
     }
 
     function openShop() { if(isLevelTransitioning && birdQueue.length === 0 && pigs.length === 0) return; document.getElementById('overlay').style.display = 'none'; document.getElementById('shop-overlay').style.display = 'flex'; renderShop(); }
@@ -309,10 +294,13 @@
       Runner.run(Runner.create(), engine); Render.run(render);
 
       const ground = Bodies.rectangle(400, 370, 800, 40, { isStatic: true, render: { fillStyle: '#2d3436' } });
+      // 【修復核心】：將基座設定為幽靈化 isSensor: true，完全防止物理擠壓彈出！
+      const slingBase = Bodies.rectangle(130, 335, 15, 70, { isStatic: true, isSensor: true, render: { fillStyle: '#8e44ad', strokeStyle: '#fff', lineWidth: 2 } });
       const lw = Bodies.rectangle(-20, 200, 40, 400, { isStatic: true }), rw = Bodies.rectangle(820, 200, 40, 400, { isStatic: true });
-      Composite.add(engine.world, [ground, lw, rw]);
+      Composite.add(engine.world, [ground, slingBase, lw, rw]);
 
       window.addEventListener('resize', resizeCanvas);
+      window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 200));
       resizeCanvas();
 
       function handleStart(e) {
@@ -349,7 +337,13 @@
         if (e.type === 'touchmove') e.preventDefault();
         let pos = getEvtPos(e); let diff = Vector.sub(pos, slingAnchor);
         if (Vector.magnitude(diff) > MAX_PULL_DISTANCE) diff = Vector.mult(Vector.normalise(diff), MAX_PULL_DISTANCE);
-        Body.setPosition(currentBird, Vector.add(slingAnchor, diff)); Body.setVelocity(currentBird, { x: 0, y: 0 });
+        let targetPos = Vector.add(slingAnchor, diff);
+        // 【修復核心】：絕對領域限制，不准把小鳥往下拉穿過 330 地面防線！
+        if (targetPos.y > 330) targetPos.y = 330; 
+        if (targetPos.x < 20) targetPos.x = 20;
+        
+        Body.setPosition(currentBird, targetPos); 
+        Body.setVelocity(currentBird, { x: 0, y: 0 });
       }
 
       function handleEnd(e) {
@@ -389,7 +383,7 @@
               const sa = Vector.magnitude(p.bodyA.velocity), sb = Vector.magnitude(p.bodyB.velocity);
               if (Math.max(sa, sb) > 1.8) {
                 pg.hp -= Math.max(sa, sb) * 15; 
-                if(pg.hp <= 0) myScore += 1000; // 砸死豬加分
+                if(pg.hp <= 0) myScore += 1000; 
               }
             }
           });
@@ -397,7 +391,15 @@
       });
 
       Events.on(engine, 'beforeUpdate', () => {
-        for (let i = pigs.length - 1; i >= 0; i--) { if (pigs[i].hp <= 0 || pigs[i].position.y > HEIGHT) { Composite.remove(engine.world, pigs[i]); pigs.splice(i, 1); } }
+        // 【修復核心】：未發射前，強制鎖死座標在彈弓上，不准它受重力影響而慢慢下沉碰到柱子！
+        if (currentBird && !isLaunched && !isDragging) {
+           Body.setPosition(currentBird, slingAnchor); Body.setVelocity(currentBird, { x: 0, y: 0 });
+        }
+        for (let i = pigs.length - 1; i >= 0; i--) { 
+          if (pigs[i].hp <= 0 || pigs[i].position.y > HEIGHT + 50) { 
+            Composite.remove(engine.world, pigs[i]); pigs.splice(i, 1); 
+          } 
+        }
         if(document.getElementById('game-container').style.display !== 'none') { updateUI(); checkLevelRules(); }
       });
     }
@@ -407,13 +409,25 @@
 
     function generateLevel(idx) {
       let di = idx % LEVEL_DESIGNS.length, lc = Math.floor(idx / LEVEL_DESIGNS.length), ds = LEVEL_DESIGNS[di];
-      if (ds.cb) { ds.cb(lc); } else { ds.t.forEach(tw => { let cy = 350; for (let h = 0; h < tw.h; h++) { createBlock(tw.x, cy - 40, 15, 80, tw.m); createBlock(tw.x + 50, cy - 40, 15, 80, tw.m); createBlock(tw.x + 25, cy - 85, 90, 15, tw.m); if (h === tw.h - 1 || (h % 2 === 0)) createPig(tw.x + 25, cy - 40, 14, 30 + idx * 10); cy -= 90; } }); }
+      if (ds.cb) { ds.cb(lc); } else { 
+        ds.t.forEach(tw => { 
+          let cy = 350; 
+          for (let h = 0; h < tw.h; h++) { 
+            createBlock(tw.x, cy - 40, 15, 80, tw.m); 
+            createBlock(tw.x + 50, cy - 40, 15, 80, tw.m); 
+            if (h === tw.h - 1 || (h % 2 === 0)) createPig(tw.x + 25, cy - 15, 14, 30 + idx * 10); 
+            createBlock(tw.x + 25, cy - 87.5, 90, 15, tw.m); 
+            cy -= 95; 
+          } 
+        }); 
+      }
       let q = [...ds.b]; for(let i=0; i<lc; i++) q.push('red'); return q;
     }
 
     function spawnBird() {
       if (birdQueue.length === 0) return; let tk = birdQueue.shift(), bd = BIRD_TYPES[tk]; isLaunched = false; canSkill = false;
-      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, bd.r, { density: bd.density, friction: 0.2, restitution: bd.rest, collisionFilter: { category: BIRD_CATEGORY }, render: { fillStyle: bd.color, strokeStyle: '#ecf0f1', lineWidth: 2 } }); 
+      // 移除原有的 category 篩選器，讓物理引擎回歸最穩定的全預設碰撞！
+      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, bd.r, { density: bd.density, friction: 0.2, restitution: bd.rest, render: { fillStyle: bd.color, strokeStyle: '#ecf0f1', lineWidth: 2 } }); 
       currentBird.bType = tk; allBirds.push(currentBird); 
       currentSling = Constraint.create({ pointA: slingAnchor, bodyB: currentBird, stiffness: 0.06, length: 0, render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 } });
       Composite.add(engine.world, [currentBird, currentSling]);
@@ -421,26 +435,16 @@
     
     function spawnNextBird() { 
       if (pigs.length > 0 && birdQueue.length > 0 && !isLevelTransitioning) { 
-        if (gameMode === '2p') { 
-          currentPlayer = currentPlayer === 1 ? 2 : 1; 
-          showTurnBanner(currentPlayer, spawnBird);
-        } else {
-          spawnBird();
-        }
+        spawnBird();
       } 
     }
     
-    function clearGameWorld() { if (spawnTimeout) clearTimeout(spawnTimeout); pigs.forEach(p => Composite.remove(engine.world, p)); blocks.forEach(b => Composite.remove(engine.world, b)); allBirds.forEach(b => Composite.remove(engine.world, b)); customConstraints.forEach(c => Composite.remove(engine.world, c)); if(currentSling) Composite.remove(engine.world, currentSling); pigs = []; blocks = []; allBirds = []; customConstraints = []; currentSling = null; }
+    function clearGameWorld() { if (spawnTimeout) clearTimeout(spawnTimeout); pigs.forEach(p => Composite.remove(engine.world, p)); blocks.forEach(b => Composite.remove(engine.world, b)); allBirds.forEach(b => Composite.remove(engine.world, b)); customConstraints.forEach(c => Composite.remove(engine.world, c)); if(currentSling) Composite.remove(engine.world, currentSling); pigs = []; blocks = []; allBirds = []; customConstraints = []; currentSling = null; currentBird = null; }
 
     function loadLevel(idx) { 
-      isLevelTransitioning = true; levelReady = false; currentLevel = idx; currentPlayer = 1; myScore = 0;
+      isLevelTransitioning = true; levelReady = false; currentLevel = idx; myScore = 0;
       clearGameWorld(); birdQueue = generateLevel(currentLevel); 
-      
-      if (gameMode === '2p' && !isChallengeMode) {
-        showTurnBanner(1, () => { spawnBird(); setTimeout(() => { isLevelTransitioning = false; levelReady = true; resizeCanvas(); }, 200); });
-      } else {
-        spawnBird(); setTimeout(() => { isLevelTransitioning = false; levelReady = true; resizeCanvas(); }, 500); 
-      }
+      spawnBird(); setTimeout(() => { isLevelTransitioning = false; levelReady = true; resizeCanvas(); }, 500); 
     }
 
     function checkLevelRules() {
@@ -458,11 +462,10 @@
             else msg += `💀 挑戰失敗... 再接再厲！`;
             showOverlay("⚔️ 遠端挑戰結束！", msg, [
               { text: "🔄 再挑戰一次", colorClass: "btn-restart", action: () => loadLevel(currentLevel) },
-              { text: "🔗 發起我的挑戰 (複製網址)", colorClass: "btn-purple", action: () => shareChallengeLink() }
+              { text: "🔗 發起我的挑戰 (傳給朋友)", colorClass: "btn-purple", action: () => shareChallengeLink() }
             ]);
           } else {
-            let mt = gameMode === '1p' ? "🎉 關卡完成！" : "🎉 合作無間！過關！"; 
-            showOverlay(mt, `基礎過關 + 擊殺加分\n節省鳥類: +${birdBonus} 分\n\n🏆 本局總分: ${myScore}\n💰 獲得金幣: ${tr}`, [ 
+            showOverlay("🎉 關卡完成！", `基礎過關 + 擊殺加分\n節省鳥類: +${birdBonus} 分\n\n🏆 本局總分: ${myScore}\n💰 獲得金幣: ${tr}`, [ 
               { text: "挑戰下一關", colorClass: "btn-green", action: () => loadLevel(currentLevel + 1) }, 
               { text: "🔗 傳給朋友(發起挑戰)", colorClass: "btn-purple", action: () => shareChallengeLink() },
               { text: "回地圖", colorClass: "btn-map", action: () => backToMap() } 
@@ -479,10 +482,11 @@
             if (pigs.length > 0) { 
               if(isChallengeMode) {
                 showOverlay("💀 挑戰失敗", `你的分數: ${myScore}\n對手分數: ${rivalScore}\n\n你沒有消滅所有綠豬...`, [
-                  { text: "🔄 再試一次", colorClass: "btn-restart", action: () => loadLevel(currentLevel) }
+                  { text: "🔄 再試一次", colorClass: "btn-restart", action: () => loadLevel(currentLevel) },
+                  { text: "回地圖", colorClass: "btn-map", action: () => { isChallengeMode=false; backToMap(); } }
                 ]);
               } else {
-                showOverlay("💀 彈藥耗盡！", `你們還有 ${coins} 枚金幣，要進商店買鳥逆轉嗎？`, [ 
+                showOverlay("💀 彈藥耗盡！", `你還有 ${coins} 枚金幣，要進商店買鳥逆轉嗎？`, [ 
                   { text: "🛒 打開鳥店", colorClass: "btn-yellow", action: () => openShop() }, 
                   { text: "重新挑戰", colorClass: "btn-restart", action: () => loadLevel(currentLevel) }, 
                   { text: "回地圖", colorClass: "btn-map", action: () => backToMap() } 
@@ -502,11 +506,8 @@
       document.getElementById('pigs-txt').textContent = pigs.length; 
       document.getElementById('coins-txt').textContent = coins;
       document.getElementById('score-txt').textContent = myScore;
-      const ti = document.getElementById('turn-indicator');
-      if (gameMode === '2p' && !isChallengeMode) { ti.style.display = "block"; if (currentPlayer === 1) { ti.textContent = "🎮 1P 回合 (紅)"; ti.style.background = "rgba(231, 76, 60, 0.9)"; } else { ti.textContent = "🎮 2P 回合 (藍)"; ti.style.background = "rgba(52, 152, 219, 0.9)"; } } else { ti.style.display = "none"; }
     }
 
-    // 啟動點：檢查 URL 決定進入挑戰模式或主選單
     window.onload = () => {
       if (!parseURLChallenge()) {
          document.getElementById('main-menu').style.display = 'flex';
