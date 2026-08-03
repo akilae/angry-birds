@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>憤怒鳥：觸控絕對精準版 (By 李御銘)</title>
+  <title>憤怒鳥：商店修復版 (By 李御銘)</title>
   <style>
     * { box-sizing: border-box; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
     body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: none; }
@@ -63,7 +63,7 @@
   <div id="main-menu" class="overlay-base">
     <div class="overlay-box" style="padding: 40px 30px;">
       <div class="overlay-title" style="font-size: 36px;">憤怒鳥</div>
-      <div class="overlay-msg" style="margin-bottom: 30px;">手刻觸控追蹤・絕對精準版</div>
+      <div class="overlay-msg" style="margin-bottom: 30px;">手刻觸控追蹤・商店修復版</div>
       <button class="overlay-btn btn-green" onclick="startGame()">▶ 開始單人闖關</button>
       <div style="font-size: 14px; color: #bdc3c7; margin-top: 25px; letter-spacing: 1px;">作者：李御銘</div>
     </div>
@@ -131,8 +131,6 @@
     let birdQueue = [], currentBird = null, isLaunched = false, currentSling = null;
     let pigs = [], blocks = [], allBirds = [], customConstraints = [];
     let canSkill = false, isLevelTransitioning = false, levelReady = false, spawnTimeout = null;
-    
-    // 【全新觸控變數】
     let isDragging = false; 
 
     let isChallengeMode = false, rivalScore = 0, myScore = 0;
@@ -221,8 +219,19 @@
       document.getElementById('overlay').style.display = 'flex';
     }
 
-    function openShop() { if(isLevelTransitioning && birdQueue.length === 0 && pigs.length === 0) return; document.getElementById('overlay').style.display = 'none'; document.getElementById('shop-overlay').style.display = 'flex'; renderShop(); }
-    function closeShop() { document.getElementById('shop-overlay').style.display = 'none'; if (isLevelTransitioning && pigs.length > 0 && birdQueue.length === 0 && isLaunched) { checkLevelRules(); } }
+    function openShop() { 
+      // 只要不是過關轉場，隨時可以開商店
+      document.getElementById('overlay').style.display = 'none'; 
+      document.getElementById('shop-overlay').style.display = 'flex'; 
+      renderShop(); 
+    }
+    
+    function closeShop() { 
+      document.getElementById('shop-overlay').style.display = 'none'; 
+      if (isLevelTransitioning && pigs.length > 0 && birdQueue.length === 0 && isLaunched) { 
+        checkLevelRules(); 
+      } 
+    }
     
     function renderShop() {
       const g = document.getElementById('shop-grid'); g.innerHTML = ''; document.getElementById('shop-coins').innerText = coins;
@@ -234,15 +243,32 @@
       g.innerHTML += `<div class="bird-card" style="opacity: ${cbs ? 1 : 0.6}; border-color: #2ecc71;"><div class="b-icon" style="background: #2ecc71; width: 30px; height: 30px; border-radius: 8px; font-size: 16px;">⏭️</div><div class="b-name">快速過關</div><div class="b-desc">直接解鎖<br>下一關卡</div><button class="btn-green" style="padding: 4px 12px; font-size:13px; margin-top: auto;" onclick="buySkipLevel()" ${cbs?'':'disabled'}>${sc} 💰</button></div>`;
     }
     
+    // 【核心修復：秒買秒切換系統】
     function buyBird(k) { 
       let b = BIRD_TYPES[k]; 
-      if (coins >= b.cost) { 
-        coins -= b.cost; birdQueue.unshift(k); isLevelTransitioning = false; 
-        if (!currentBird || (isLaunched && Vector.magnitude(currentBird.velocity) < 0.1)) { 
-          if (spawnTimeout) clearTimeout(spawnTimeout); spawnBird(); 
-        } 
-        updateUI(); renderShop(); 
-      } 
+      if (coins < b.cost) return;
+      
+      coins -= b.cost; 
+      isLevelTransitioning = false; // 解除彈盡糧絕的死亡鎖定
+      
+      // 如果彈弓上原本有鳥（且還沒發射），把牠退回庫存排隊區
+      if (currentBird && !isLaunched) {
+        birdQueue.unshift(currentBird.bType);
+        Composite.remove(engine.world, currentBird);
+        if (currentSling) Composite.remove(engine.world, currentSling);
+        currentBird = null;
+        currentSling = null;
+      }
+      
+      // 將買來的新鳥放在隊列最前面
+      birdQueue.unshift(k);
+      
+      // 立刻召喚這隻新鳥上彈弓！
+      if (spawnTimeout) clearTimeout(spawnTimeout);
+      spawnBird();
+      
+      updateUI(); 
+      renderShop(); 
     }
     
     function buySkipLevel() { let sc = 80; if (coins >= sc) { coins -= sc; closeShop(); forceWinLevel(); } }
@@ -290,9 +316,6 @@
       loadLevel(i); 
     }
 
-    // ==========================================
-    // 【全新】絕對追蹤！手刻防呆觸控引擎
-    // ==========================================
     function getCanvasPos(e) {
       const rect = canvas.getBoundingClientRect();
       const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
@@ -314,7 +337,6 @@
       const lw = Bodies.rectangle(-20, 200, 40, 400, { isStatic: true }), rw = Bodies.rectangle(820, 200, 40, 400, { isStatic: true });
       Composite.add(engine.world, [ground, slingBase, lw, rw]);
 
-      // 觸控事件核心綁定 (完全拔除 MouseConstraint)
       canvas.addEventListener('touchstart', handleStart, { passive: false });
       canvas.addEventListener('mousedown', handleStart, { passive: false });
       window.addEventListener('touchmove', handleMove, { passive: false });
@@ -323,12 +345,12 @@
       window.addEventListener('mouseup', handleEnd, { passive: false });
 
       function handleStart(e) {
+        if (e.target !== canvas && e.target.tagName !== 'CANVAS') return; // 不要阻擋 UI 按鈕
         if (e.type === 'touchstart') e.preventDefault();
         if (isLevelTransitioning || !levelReady || !currentBird) return;
         
         let pos = getCanvasPos(e);
 
-        // 發動技能
         if (isLaunched && canSkill) {
           canSkill = false;
           if (currentBird.bType === 'black') {
@@ -347,7 +369,6 @@
           return;
         }
 
-        // 偵測是否按在鳥或彈弓附近 (感應範圍放大到 70 像素，瞎按都能抓到)
         if (!isLaunched) {
           let dist = Vector.magnitude(Vector.sub(pos, slingAnchor));
           if (dist < 70) {
@@ -363,13 +384,11 @@
         let pos = getCanvasPos(e);
         let diff = Vector.sub(pos, slingAnchor);
         
-        // 限制最大拖曳半徑
         if (Vector.magnitude(diff) > MAX_PULL_DISTANCE) {
           diff = Vector.mult(Vector.normalise(diff), MAX_PULL_DISTANCE);
         }
         
         let target = Vector.add(slingAnchor, diff);
-        // 絕對防呆結界：絕不允許鳥被拉進土裡或跑到彈弓前面
         if (target.y > 330) target.y = 330;
         if (target.x > slingAnchor.x + 20) target.x = slingAnchor.x + 20;
 
@@ -387,12 +406,10 @@
           if (spawnTimeout) clearTimeout(spawnTimeout);
           spawnTimeout = setTimeout(spawnNextBird, 4000);
         } else {
-          // 拉太短，歸位
           Body.setPosition(currentBird, slingAnchor);
         }
       }
 
-      // 監聽發射脫離彈弓
       Events.on(engine, 'afterUpdate', () => {
         if (isLaunched && currentSling && currentSling.bodyB) {
           if (currentBird.position.x > slingAnchor.x || Vector.magnitude(Vector.sub(currentBird.position, slingAnchor)) < 15) {
@@ -420,7 +437,6 @@
       });
 
       Events.on(engine, 'beforeUpdate', () => {
-        // 未發射前，強制定死在彈弓上，免疫重力！
         if (currentBird && !isLaunched && !isDragging) {
            Body.setPosition(currentBird, slingAnchor); 
            Body.setVelocity(currentBird, { x: 0, y: 0 });
@@ -455,10 +471,19 @@
     }
 
     function spawnBird() {
-      if (birdQueue.length === 0) return; let tk = birdQueue.shift(), bd = BIRD_TYPES[tk]; isLaunched = false; canSkill = false;
-      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, bd.r, { density: bd.density, friction: 0.2, restitution: bd.rest, render: { fillStyle: bd.color, strokeStyle: '#ecf0f1', lineWidth: 2 } }); 
+      if (birdQueue.length === 0) return; 
+      let tk = birdQueue.shift(), bd = BIRD_TYPES[tk]; isLaunched = false; canSkill = false;
+      
+      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, bd.r, { 
+        density: bd.density, friction: 0.2, restitution: bd.rest, 
+        render: { fillStyle: bd.color, strokeStyle: '#ecf0f1', lineWidth: 2 } 
+      }); 
       currentBird.bType = tk; allBirds.push(currentBird); 
-      currentSling = Constraint.create({ pointA: slingAnchor, bodyB: currentBird, stiffness: 0.05, length: 0, render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 } });
+      
+      currentSling = Constraint.create({ 
+        pointA: slingAnchor, bodyB: currentBird, stiffness: 0.05, length: 0, 
+        render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 } 
+      });
       Composite.add(engine.world, [currentBird, currentSling]);
     }
     
@@ -468,7 +493,15 @@
       } 
     }
     
-    function clearGameWorld() { if (spawnTimeout) clearTimeout(spawnTimeout); pigs.forEach(p => Composite.remove(engine.world, p)); blocks.forEach(b => Composite.remove(engine.world, b)); allBirds.forEach(b => Composite.remove(engine.world, b)); customConstraints.forEach(c => Composite.remove(engine.world, c)); if(currentSling) Composite.remove(engine.world, currentSling); pigs = []; blocks = []; allBirds = []; customConstraints = []; currentSling = null; currentBird = null; }
+    function clearGameWorld() { 
+      if (spawnTimeout) clearTimeout(spawnTimeout); 
+      pigs.forEach(p => Composite.remove(engine.world, p)); 
+      blocks.forEach(b => Composite.remove(engine.world, b)); 
+      allBirds.forEach(b => Composite.remove(engine.world, b)); 
+      customConstraints.forEach(c => Composite.remove(engine.world, c)); 
+      if(currentSling) Composite.remove(engine.world, currentSling); 
+      pigs = []; blocks = []; allBirds = []; customConstraints = []; currentSling = null; currentBird = null; 
+    }
 
     function loadLevel(idx) { 
       isLevelTransitioning = true; levelReady = false; currentLevel = idx; myScore = 0;
@@ -515,8 +548,9 @@
                   { text: "回地圖", colorClass: "btn-map", action: () => { isChallengeMode=false; backToMap(); } }
                 ]);
               } else {
+                // 【觸發復活選單】
                 showOverlay("💀 彈藥耗盡！", `你還有 ${coins} 枚金幣，要進商店買鳥逆轉嗎？`, [ 
-                  { text: "🛒 打開鳥店", colorClass: "btn-yellow", action: () => openShop() }, 
+                  { text: "🛒 打開鳥店復活", colorClass: "btn-yellow", action: () => openShop() }, 
                   { text: "重新挑戰", colorClass: "btn-restart", action: () => loadLevel(currentLevel) }, 
                   { text: "回地圖", colorClass: "btn-map", action: () => backToMap() } 
                 ]); 
