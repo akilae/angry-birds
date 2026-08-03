@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>憤怒鳥：觸控完美順暢版 (By 李御銘)</title>
+  <title>憤怒鳥：觸控絕對精準版 (By 李御銘)</title>
   <style>
     * { box-sizing: border-box; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
     body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: none; }
@@ -24,7 +24,7 @@
     .btn-map { background: #3498db; color: white; border: 2px solid #2980b9; }
     
     #game-container { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(to bottom, #1e3c72, #2a5298); z-index: 1; align-items: center; justify-content: center; }
-    canvas { max-width: 100vw; max-height: 100vh; aspect-ratio: 2 / 1; box-shadow: 0 0 20px rgba(0,0,0,0.8); object-fit: contain; cursor: crosshair; }
+    canvas { max-width: 100vw; max-height: 100vh; aspect-ratio: 2 / 1; box-shadow: 0 0 20px rgba(0,0,0,0.8); object-fit: contain; cursor: crosshair; touch-action: none; }
     
     #map-screen { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460); z-index: 50; flex-direction: column; align-items: center; padding: 20px; overflow-y: auto; scroll-behavior: smooth; pointer-events: auto; }
     .map-header { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; margin-top: 10px; position: sticky; top: 0; z-index: 60; background: rgba(26, 26, 46, 0.95); padding: 15px 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
@@ -60,17 +60,15 @@
 </head>
 <body>
 
-  <!-- 主選單 -->
   <div id="main-menu" class="overlay-base">
     <div class="overlay-box" style="padding: 40px 30px;">
       <div class="overlay-title" style="font-size: 36px;">憤怒鳥</div>
-      <div class="overlay-msg" style="margin-bottom: 30px;">滑順觸控・完美修復版</div>
+      <div class="overlay-msg" style="margin-bottom: 30px;">手刻觸控追蹤・絕對精準版</div>
       <button class="overlay-btn btn-green" onclick="startGame()">▶ 開始單人闖關</button>
       <div style="font-size: 14px; color: #bdc3c7; margin-top: 25px; letter-spacing: 1px;">作者：李御銘</div>
     </div>
   </div>
 
-  <!-- 地圖介面 -->
   <div id="map-screen">
     <div class="map-header">
       <div class="map-header-top">
@@ -88,7 +86,6 @@
     <div class="level-grid" id="level-grid"></div>
   </div>
 
-  <!-- 遊戲 UI -->
   <div id="ui-layer">
     <div class="hud-panel">
       <div class="hud-text">Lv <span id="lvl-txt" class="highlight">1</span></div>
@@ -105,10 +102,8 @@
     </div>
   </div>
 
-  <!-- 遊戲畫布 -->
   <div id="game-container"><canvas id="canvas"></canvas></div>
 
-  <!-- 對話與結算框 -->
   <div id="overlay" class="overlay-base" style="display: none;">
     <div class="overlay-box">
       <div class="overlay-title" id="overlay-title">標題</div>
@@ -117,7 +112,6 @@
     </div>
   </div>
 
-  <!-- 商店框 -->
   <div id="shop-overlay" class="overlay-base" style="display: none;">
     <div class="overlay-box" style="max-width: 600px;">
       <div class="overlay-title">飛鳥商店 (💰 <span id="shop-coins"></span>)</div>
@@ -127,17 +121,19 @@
   </div>
 
   <script>
-    const { Engine, Render, Runner, Bodies, Composite, Constraint, Mouse, MouseConstraint, Events, Body, Vector } = Matter;
+    const { Engine, Render, Runner, Bodies, Composite, Constraint, Events, Body, Vector } = Matter;
     const canvas = document.getElementById('canvas');
     const WIDTH = 800; const HEIGHT = 400; const MAX_PULL_DISTANCE = 120; const LEVELS_PER_MAP = 30;
-    const BIRD_CATEGORY = 0x0002;
 
-    let engine, render, mouseConstraint;
+    let engine, render;
     let slingAnchor = { x: 130, y: 280 };
     let unlockedLevel = 0, currentLevel = 0, currentMapPage = 0, coins = 100;
     let birdQueue = [], currentBird = null, isLaunched = false, currentSling = null;
     let pigs = [], blocks = [], allBirds = [], customConstraints = [];
     let canSkill = false, isLevelTransitioning = false, levelReady = false, spawnTimeout = null;
+    
+    // 【全新觸控變數】
+    let isDragging = false; 
 
     let isChallengeMode = false, rivalScore = 0, myScore = 0;
 
@@ -181,7 +177,6 @@
             document.getElementById('btn-map-return').style.display = 'none'; 
             document.getElementById('rival-indicator').style.display = 'block';
             document.getElementById('rival-txt').textContent = rivalScore;
-            
             showOverlay("⚔️ 收到遠端挑戰帖！", `朋友在 Level ${lvl+1} 打出了 ${sc} 分！\n你有把握超越他嗎？`, [
               { text: "🔥 接受挑戰！", colorClass: "btn-restart", action: () => {
                 if (!engine) initEngine();
@@ -200,7 +195,6 @@
     function shareChallengeLink() {
       const shareUrl = `${window.location.origin}${window.location.pathname}?challenge=1&level=${currentLevel}&score=${myScore}`;
       const shareText = `我在第 ${currentLevel + 1} 關打出了 ${myScore} 分！你能打破我的紀錄嗎？`;
-
       if (navigator.share) {
         navigator.share({ title: '憤怒鳥挑戰帖！', text: shareText, url: shareUrl }).catch(() => {});
       } else if (navigator.clipboard && window.isSecureContext) {
@@ -297,70 +291,45 @@
     }
 
     // ==========================================
-    // 核心引擎初始化 (回歸最穩定的 MouseConstraint)
+    // 【全新】絕對追蹤！手刻防呆觸控引擎
     // ==========================================
+    function getCanvasPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+      return {
+        x: (clientX - rect.left) * (WIDTH / rect.width),
+        y: (clientY - rect.top) * (HEIGHT / rect.height)
+      };
+    }
+
     function initEngine() {
       engine = Engine.create({ gravity: { x: 0, y: 1.1 } }); 
       canvas.width = WIDTH; canvas.height = HEIGHT;
       render = Render.create({ canvas: canvas, engine: engine, options: { width: WIDTH, height: HEIGHT, wireframes: false, background: 'transparent' } });
       Runner.run(Runner.create(), engine); Render.run(render);
 
-      // 建立地板與幽靈柱子 (保證鳥不會碰撞到彈弓柱)
       const ground = Bodies.rectangle(400, 370, 800, 40, { isStatic: true, render: { fillStyle: '#2d3436' } });
       const slingBase = Bodies.rectangle(130, 335, 15, 70, { isStatic: true, isSensor: true, render: { fillStyle: '#8e44ad', strokeStyle: '#fff', lineWidth: 2 } });
       const lw = Bodies.rectangle(-20, 200, 40, 400, { isStatic: true }), rw = Bodies.rectangle(820, 200, 40, 400, { isStatic: true });
       Composite.add(engine.world, [ground, slingBase, lw, rw]);
 
-      // Matter 原生觸控控制！
-      const mouse = Mouse.create(render.canvas);
-      mouseConstraint = MouseConstraint.create(engine, { 
-        mouse: mouse, 
-        constraint: { stiffness: 0.1, render: { visible: false } },
-        collisionFilter: { mask: BIRD_CATEGORY } // 嚴格限制：滑鼠只能拖動小鳥！
-      });
-      Composite.add(engine.world, mouseConstraint);
+      // 觸控事件核心綁定 (完全拔除 MouseConstraint)
+      canvas.addEventListener('touchstart', handleStart, { passive: false });
+      canvas.addEventListener('mousedown', handleStart, { passive: false });
+      window.addEventListener('touchmove', handleMove, { passive: false });
+      window.addEventListener('mousemove', handleMove, { passive: false });
+      window.addEventListener('touchend', handleEnd, { passive: false });
+      window.addEventListener('mouseup', handleEnd, { passive: false });
 
-      // 動態更新觸控縮放比例 (防錯位核心)
-      function updateMouseScale() {
-        if (canvas.getBoundingClientRect().width > 0) {
-          Mouse.setScale(mouseConstraint.mouse, { 
-            x: WIDTH / canvas.getBoundingClientRect().width, 
-            y: HEIGHT / canvas.getBoundingClientRect().height 
-          });
-        }
-      }
-      window.addEventListener('resize', updateMouseScale);
-      window.addEventListener('orientationchange', () => setTimeout(updateMouseScale, 300));
-      setTimeout(updateMouseScale, 500);
+      function handleStart(e) {
+        if (e.type === 'touchstart') e.preventDefault();
+        if (isLevelTransitioning || !levelReady || !currentBird) return;
+        
+        let pos = getCanvasPos(e);
 
-      // 監聽拖曳結束 -> 發射小鳥
-      Events.on(mouseConstraint, 'enddrag', (e) => {
-        if (e.body === currentBird && !isLaunched && levelReady) {
-          let pullDist = Vector.magnitude(Vector.sub(currentBird.position, slingAnchor));
-          if (pullDist > 15) {
-            isLaunched = true; canSkill = true;
-            // 延遲脫離彈弓
-          }
-        }
-      });
-
-      // 放開後自動解開約束並給予下一隻鳥
-      Events.on(engine, 'afterUpdate', () => {
-        if (isLaunched && currentSling && currentSling.bodyB) {
-          // 當小鳥飛過發射點，徹底解開橡皮筋
-          if (currentBird.position.x > slingAnchor.x || Vector.magnitude(Vector.sub(currentBird.position, slingAnchor)) < 15) {
-            currentSling.bodyB = null; 
-            Composite.remove(engine.world, currentSling); 
-            currentSling = null;
-            if (spawnTimeout) clearTimeout(spawnTimeout);
-            spawnTimeout = setTimeout(spawnNextBird, 4000);
-          }
-        }
-      });
-
-      // 小鳥發動特殊技能 (全域點擊事件)
-      window.addEventListener('pointerdown', () => {
-        if (isLaunched && canSkill && currentBird && levelReady && document.getElementById('game-container').style.display !== 'none') {
+        // 發動技能
+        if (isLaunched && canSkill) {
           canSkill = false;
           if (currentBird.bType === 'black') {
              Composite.allBodies(engine.world).forEach(b => {
@@ -375,10 +344,65 @@
           } else if (currentBird.bType === 'red') {
              Body.applyForce(currentBird, currentBird.position, Vector.mult(Vector.normalise(currentBird.velocity), 0.08));
           }
+          return;
+        }
+
+        // 偵測是否按在鳥或彈弓附近 (感應範圍放大到 70 像素，瞎按都能抓到)
+        if (!isLaunched) {
+          let dist = Vector.magnitude(Vector.sub(pos, slingAnchor));
+          if (dist < 70) {
+            isDragging = true;
+          }
+        }
+      }
+
+      function handleMove(e) {
+        if (!isDragging || !currentBird) return;
+        if (e.type === 'touchmove') e.preventDefault();
+        
+        let pos = getCanvasPos(e);
+        let diff = Vector.sub(pos, slingAnchor);
+        
+        // 限制最大拖曳半徑
+        if (Vector.magnitude(diff) > MAX_PULL_DISTANCE) {
+          diff = Vector.mult(Vector.normalise(diff), MAX_PULL_DISTANCE);
+        }
+        
+        let target = Vector.add(slingAnchor, diff);
+        // 絕對防呆結界：絕不允許鳥被拉進土裡或跑到彈弓前面
+        if (target.y > 330) target.y = 330;
+        if (target.x > slingAnchor.x + 20) target.x = slingAnchor.x + 20;
+
+        Body.setPosition(currentBird, target);
+      }
+
+      function handleEnd(e) {
+        if (!isDragging || !currentBird) return;
+        isDragging = false;
+        
+        let diff = Vector.sub(slingAnchor, currentBird.position);
+        if (Vector.magnitude(diff) > 20) {
+          isLaunched = true; 
+          canSkill = true;
+          if (spawnTimeout) clearTimeout(spawnTimeout);
+          spawnTimeout = setTimeout(spawnNextBird, 4000);
+        } else {
+          // 拉太短，歸位
+          Body.setPosition(currentBird, slingAnchor);
+        }
+      }
+
+      // 監聽發射脫離彈弓
+      Events.on(engine, 'afterUpdate', () => {
+        if (isLaunched && currentSling && currentSling.bodyB) {
+          if (currentBird.position.x > slingAnchor.x || Vector.magnitude(Vector.sub(currentBird.position, slingAnchor)) < 15) {
+            currentSling.bodyB = null; 
+            Composite.remove(engine.world, currentSling); 
+            currentSling = null;
+          }
         }
       });
 
-      // 碰撞偵測 (扣血機制)
       Events.on(engine, 'collisionStart', (e) => {
         if (!levelReady) return; 
         e.pairs.forEach(p => {
@@ -395,20 +419,14 @@
         });
       });
 
-      // 拖曳極限防護與畫面更新
       Events.on(engine, 'beforeUpdate', () => {
-        // 如果正在拖曳，限制最大拉力距離
-        if (currentBird && !isLaunched && mouseConstraint.body === currentBird) {
-          let dist = Vector.magnitude(Vector.sub(currentBird.position, slingAnchor));
-          if (dist > MAX_PULL_DISTANCE) {
-            let dir = Vector.normalise(Vector.sub(currentBird.position, slingAnchor));
-            Body.setPosition(currentBird, Vector.add(slingAnchor, Vector.mult(dir, MAX_PULL_DISTANCE)));
-          }
+        // 未發射前，強制定死在彈弓上，免疫重力！
+        if (currentBird && !isLaunched && !isDragging) {
+           Body.setPosition(currentBird, slingAnchor); 
+           Body.setVelocity(currentBird, { x: 0, y: 0 });
         }
-        
-        // 垃圾回收：清理掉出畫面的豬
         for (let i = pigs.length - 1; i >= 0; i--) { 
-          if (pigs[i].hp <= 0 || pigs[i].position.y > HEIGHT + 100) { 
+          if (pigs[i].hp <= 0 || pigs[i].position.y > HEIGHT + 50) { 
             Composite.remove(engine.world, pigs[i]); pigs.splice(i, 1); 
           } 
         }
@@ -437,20 +455,10 @@
     }
 
     function spawnBird() {
-      if (birdQueue.length === 0) return; 
-      let tk = birdQueue.shift(), bd = BIRD_TYPES[tk]; isLaunched = false; canSkill = false;
-      // 賦予小鳥 category: 0x0002，確保 MouseConstraint 只能抓它！
-      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, bd.r, { 
-        density: bd.density, friction: 0.2, restitution: bd.rest, 
-        collisionFilter: { category: BIRD_CATEGORY },
-        render: { fillStyle: bd.color, strokeStyle: '#ecf0f1', lineWidth: 2 } 
-      }); 
+      if (birdQueue.length === 0) return; let tk = birdQueue.shift(), bd = BIRD_TYPES[tk]; isLaunched = false; canSkill = false;
+      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, bd.r, { density: bd.density, friction: 0.2, restitution: bd.rest, render: { fillStyle: bd.color, strokeStyle: '#ecf0f1', lineWidth: 2 } }); 
       currentBird.bType = tk; allBirds.push(currentBird); 
-      
-      currentSling = Constraint.create({ 
-        pointA: slingAnchor, bodyB: currentBird, stiffness: 0.05, length: 0, 
-        render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 } 
-      });
+      currentSling = Constraint.create({ pointA: slingAnchor, bodyB: currentBird, stiffness: 0.05, length: 0, render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 } });
       Composite.add(engine.world, [currentBird, currentSling]);
     }
     
@@ -460,33 +468,12 @@
       } 
     }
     
-    function clearGameWorld() { 
-      if (spawnTimeout) clearTimeout(spawnTimeout); 
-      pigs.forEach(p => Composite.remove(engine.world, p)); 
-      blocks.forEach(b => Composite.remove(engine.world, b)); 
-      allBirds.forEach(b => Composite.remove(engine.world, b)); 
-      customConstraints.forEach(c => Composite.remove(engine.world, c)); 
-      if(currentSling) Composite.remove(engine.world, currentSling); 
-      if (mouseConstraint) {
-         // 強制重置滑鼠，避免鬼影拖曳
-         Mouse.clearSourceEvents(mouseConstraint.mouse);
-      }
-      pigs = []; blocks = []; allBirds = []; customConstraints = []; currentSling = null; currentBird = null; 
-    }
+    function clearGameWorld() { if (spawnTimeout) clearTimeout(spawnTimeout); pigs.forEach(p => Composite.remove(engine.world, p)); blocks.forEach(b => Composite.remove(engine.world, b)); allBirds.forEach(b => Composite.remove(engine.world, b)); customConstraints.forEach(c => Composite.remove(engine.world, c)); if(currentSling) Composite.remove(engine.world, currentSling); pigs = []; blocks = []; allBirds = []; customConstraints = []; currentSling = null; currentBird = null; }
 
     function loadLevel(idx) { 
       isLevelTransitioning = true; levelReady = false; currentLevel = idx; myScore = 0;
       clearGameWorld(); birdQueue = generateLevel(currentLevel); 
-      spawnBird(); 
-      setTimeout(() => { 
-        isLevelTransitioning = false; levelReady = true; 
-        if (mouseConstraint) {
-          Mouse.setScale(mouseConstraint.mouse, { 
-             x: WIDTH / canvas.getBoundingClientRect().width, 
-             y: HEIGHT / canvas.getBoundingClientRect().height 
-          });
-        }
-      }, 500); 
+      spawnBird(); setTimeout(() => { isLevelTransitioning = false; levelReady = true; }, 500); 
     }
 
     function checkLevelRules() {
