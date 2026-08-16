@@ -1,581 +1,270 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>憤怒鳥：商店修復版 (By 李御銘)</title>
-  <style>
-    * { box-sizing: border-box; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-    body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: none; }
-    
-    #ui-layer { position: fixed; top: 10px; width: 96%; max-width: 800px; display: none; justify-content: space-between; align-items: flex-start; z-index: 20; pointer-events: none; }
-    .hud-panel { background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px); padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 15px rgba(0,0,0,0.5); pointer-events: auto; }
-    .hud-text { font-size: 14px; font-weight: bold; white-space: nowrap; color: #fff; margin-bottom: 4px; }
-    .hud-text:last-child { margin-bottom: 0; }
-    .highlight { color: #f1c40f; font-size: 16px; }
-    .rival-text { color: #e74c3c; font-size: 13px; display: none; margin-bottom: 4px; font-weight: bold;}
-    .btn-group { display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
-    button { padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.5); white-space: nowrap; transition: transform 0.1s; border: none; }
-    button:active { transform: scale(0.95); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-fs { background: #8e44ad; color: white; border: 2px solid #732d91; }
-    .btn-shop { background: #f1c40f; color: #333; border: 2px solid #d4ac0d; }
-    .btn-restart { background: #e74c3c; color: white; border: 2px solid #c0392b; }
-    .btn-map { background: #3498db; color: white; border: 2px solid #2980b9; }
-    
-    #game-container { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(to bottom, #1e3c72, #2a5298); z-index: 1; align-items: center; justify-content: center; }
-    canvas { max-width: 100vw; max-height: 100vh; aspect-ratio: 2 / 1; box-shadow: 0 0 20px rgba(0,0,0,0.8); object-fit: contain; cursor: crosshair; touch-action: none; }
-    
-    #map-screen { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460); z-index: 50; flex-direction: column; align-items: center; padding: 20px; overflow-y: auto; scroll-behavior: smooth; pointer-events: auto; }
-    .map-header { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; margin-top: 10px; position: sticky; top: 0; z-index: 60; background: rgba(26, 26, 46, 0.95); padding: 15px 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-    .map-header-top { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-    .map-title-box { display: flex; flex-direction: column; }
-    .map-title { font-size: 22px; color: #00ffcc; font-weight: bold; text-shadow: 0 0 10px rgba(0,255,204,0.5); }
-    .map-subtitle { font-size: 13px; color: #bdc3c7; margin-top: 4px; }
-    .map-coins { font-size: 18px; color: #f1c40f; font-weight: bold; }
-    .map-nav { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-    .nav-btn { background: #34495e; color: white; padding: 6px 12px; font-size: 12px; border-radius: 6px; }
-    .level-grid { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%; max-width: 600px; padding-bottom: 50px; }
-    .level-btn { width: 75px; height: 75px; border-radius: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; color: white; transition: all 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.5); cursor: pointer; }
-    .level-locked { background: #34495e; opacity: 0.7; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); cursor: not-allowed; }
-    .level-unlocked { background: #f1c40f; color: #333; border: 3px solid #fff; }
-    .level-cleared { background: #2ecc71; border: 2px solid #27ae60; }
-    .level-num { font-size: 12px; margin-top: 4px; opacity: 0.8; }
-    
-    .overlay-base { display: flex; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85); z-index: 100; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; }
-    .overlay-box { background: linear-gradient(135deg, #2c3e50, #34495e); padding: 30px; border-radius: 15px; border: 2px solid #f1c40f; text-align: center; box-shadow: 0 0 40px rgba(241, 196, 15, 0.4); color: white; min-width: 300px; max-width: 90%; }
-    .overlay-title { font-size: 28px; color: #f1c40f; margin-bottom: 10px; font-weight: bold; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-    .overlay-msg { font-size: 15px; margin-bottom: 25px; line-height: 1.6; white-space: pre-line; color: #bdc3c7; }
-    .overlay-btn { margin: 8px 0; padding: 14px 20px; border:none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; width: 100%; }
-    .btn-green { background: #2ecc71; box-shadow: 0 4px #27ae60; } .btn-yellow { background: #f1c40f; box-shadow: 0 4px #d4ac0d; color: #333; } .btn-purple { background: #8e44ad; box-shadow: 0 4px #732d91; }
-    
-    .shop-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 20px; }
-    .bird-card { background: rgba(0,0,0,0.5); border: 2px solid #7f8c8d; border-radius: 10px; padding: 10px; width: 105px; display: flex; flex-direction: column; align-items: center; transition: 0.2s; }
-    .bird-card:active { border-color: #f1c40f; }
-    .b-icon { border-radius: 50%; margin-bottom: 8px; box-shadow: inset -2px -2px 5px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
-    .b-name { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
-    .b-desc { font-size: 11px; color: #bdc3c7; margin-bottom: 10px; height: 30px; text-align: center; }
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>憤怒鳥 - 2D物理遊戲</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 1024px;
+            max-height: 768px;
+            background: #87CEEB;
+        }
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #fff;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            pointer-events: none;
+        }
+        #author {
+            position: absolute;
+            bottom: 10px;
+            left: 15px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        #reset-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            touch-action: manipulation;
+        }
+        #reset-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
 </head>
 <body>
 
-  <div id="main-menu" class="overlay-base">
-    <div class="overlay-box" style="padding: 40px 30px;">
-      <div class="overlay-title" style="font-size: 36px;">憤怒鳥</div>
-      <div class="overlay-msg" style="margin-bottom: 30px;">手刻觸控追蹤・商店修復版</div>
-      <button class="overlay-btn btn-green" onclick="startGame()">▶ 開始單人闖關</button>
-      <div style="font-size: 14px; color: #bdc3c7; margin-top: 25px; letter-spacing: 1px;">作者：李御銘</div>
-    </div>
-  </div>
+<div id="game-container">
+    <div id="ui">得分: <span id="score">0</span></div>
+    <div id="author">作者：李御銘</div>
+    <button id="reset-btn" onclick="resetGame()">重置關卡</button>
+</div>
 
-  <div id="map-screen">
-    <div class="map-header">
-      <div class="map-header-top">
-        <div class="map-title-box">
-          <div class="map-title" id="map-title-txt">世界地圖</div>
-          <div class="map-subtitle" id="map-subtitle-txt">第 1 世界 (1 - 30 關)</div>
-        </div>
-        <div class="map-coins">💰 <span id="map-coins-txt">0</span></div>
-      </div>
-      <div class="map-nav">
-        <button class="nav-btn" id="btn-prev-map" onclick="changeMapPage(-1)">◀ 上一頁</button>
-        <button class="nav-btn" id="btn-next-map" onclick="changeMapPage(1)">下一頁 ▶</button>
-      </div>
-    </div>
-    <div class="level-grid" id="level-grid"></div>
-  </div>
+<script>
+const { Engine, Render, Runner, Bodies, Composite, Constraint, Mouse, MouseConstraint, Events } = Matter;
 
-  <div id="ui-layer">
-    <div class="hud-panel">
-      <div class="hud-text">Lv <span id="lvl-txt" class="highlight">1</span></div>
-      <div class="hud-text">🏆 分數: <span id="score-txt" class="highlight">0</span></div>
-      <div class="rival-text" id="rival-indicator">⚔️ 對手: <span id="rival-txt">0</span></div>
-      <div class="hud-text">💰 <span id="coins-txt" class="highlight">0</span></div>
-      <div class="hud-text">🐦 <span id="birds-txt">3</span> | 🐷 <span id="pigs-txt">0</span></div>
-    </div>
-    <div class="btn-group">
-      <button class="btn-fs" onclick="toggleFullScreen()">📱 全螢幕</button>
-      <button class="btn-shop" onclick="openShop()">🛒 鳥店</button>
-      <button class="btn-restart" onclick="restartLevel()">重置關卡</button>
-      <button class="btn-map" id="btn-map-return" onclick="backToMap()">回地圖</button>
-    </div>
-  </div>
+const container = document.getElementById('game-container');
+const scoreEl = document.getElementById('score');
 
-  <div id="game-container"><canvas id="canvas"></canvas></div>
+let engine, render, runner, mouseConstraint;
+let bird, slingshot, isLaunched = false;
+let score = 0;
 
-  <div id="overlay" class="overlay-base" style="display: none;">
-    <div class="overlay-box">
-      <div class="overlay-title" id="overlay-title">標題</div>
-      <div class="overlay-msg" id="overlay-msg">內容</div>
-      <div id="overlay-btns" style="display: flex; flex-direction: column; gap: 8px;"></div>
-    </div>
-  </div>
+const width = 1024;
+const height = 768;
+const slingshotPos = { x: 180, y: 550 };
 
-  <div id="shop-overlay" class="overlay-base" style="display: none;">
-    <div class="overlay-box" style="max-width: 600px;">
-      <div class="overlay-title">飛鳥商店 (💰 <span id="shop-coins"></span>)</div>
-      <div class="shop-grid" id="shop-grid"></div>
-      <button class="overlay-btn btn-purple" onclick="closeShop()">離開商店</button>
-    </div>
-  </div>
+function init() {
+    engine = Engine.create();
+    
+    render = Render.create({
+        element: container,
+        engine: engine,
+        options: {
+            width: width,
+            height: height,
+            wireframes: false,
+            background: 'transparent'
+        }
+    });
 
-  <script>
-    const { Engine, Render, Runner, Bodies, Composite, Constraint, Events, Body, Vector } = Matter;
-    const canvas = document.getElementById('canvas');
-    const WIDTH = 800; const HEIGHT = 400; const MAX_PULL_DISTANCE = 120; const LEVELS_PER_MAP = 30;
+    Render.run(render);
+    runner = Runner.create();
+    Runner.run(runner, engine);
 
-    let engine, render;
-    let slingAnchor = { x: 130, y: 280 };
-    let unlockedLevel = 0, currentLevel = 0, currentMapPage = 0, coins = 100;
-    let birdQueue = [], currentBird = null, isLaunched = false, currentSling = null;
-    let pigs = [], blocks = [], allBirds = [], customConstraints = [];
-    let canSkill = false, isLevelTransitioning = false, levelReady = false, spawnTimeout = null;
-    let isDragging = false; 
+    setupScene();
+    setupMouse();
 
-    let isChallengeMode = false, rivalScore = 0, myScore = 0;
+    Events.on(engine, 'afterUpdate', checkBirdOutOfBounds);
+    Events.on(engine, 'collisionStart', handleCollisions);
 
-    const BIRD_TYPES = {
-      red: { name: '紅鳥', cost: 20, color: '#e74c3c', r: 14, density: 0.005, rest: 0.4, desc: '平衡型 / 微推進' },
-      blue: { name: '藍鳥', cost: 15, color: '#3498db', r: 10, density: 0.003, rest: 0.9, desc: '輕巧 / 高彈力' },
-      yellow: { name: '黃鳥', cost: 30, color: '#f1c40f', r: 13, density: 0.008, rest: 0.2, desc: '高密度 / 衝刺穿透' },
-      black: { name: '炸彈黑', cost: 50, color: '#2c3e50', r: 16, density: 0.012, rest: 0.2, desc: '點擊 / 範圍核爆' },
-      big: { name: '大胖紅', cost: 60, color: '#8e44ad', r: 24, density: 0.03, rest: 0.1, desc: '極重 / 物理破壞' }
-    };
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+}
 
-    const LEVEL_DESIGNS = [
-      { b: ['red','red','red'], t: [{x:500,h:2,m:'wood'},{x:650,h:2,m:'wood'}] },
-      { b: ['red','blue','red'], t: [{x:450,h:3,m:'wood'},{x:580,h:2,m:'stone'},{x:710,h:1,m:'wood'}] },
-      { b: ['yellow','red','yellow'], t: [{x:480,h:1,m:'steel'},{x:620,h:4,m:'wood'}] },
-      { b: ['black','blue','red'], t: [{x:400,h:2,m:'stone'},{x:530,h:3,m:'stone'},{x:660,h:2,m:'stone'}] },
-      { b: ['big','yellow','red'], t: [{x:450,h:4,m:'steel'},{x:650,h:4,m:'steel'}] },
-      { b: ['blue','yellow','red'], cb: (l) => { createBlock(500,200,150,20,'stone',{isStatic:true}); createBlock(450,150,15,80,'wood'); createBlock(550,150,15,80,'wood'); createBlock(500,100,120,15,'wood'); createPig(500,170,15,40+l*10); createBlock(700,280,100,20,'stone',{isStatic:true}); createPig(700,250,18,50+l*10); } },
-      { b: ['black','black','red'], cb: (l) => { let p=Bodies.circle(550,220,15,{isStatic:true,render:{fillStyle:'#7f8c8d'}}); let bl=Bodies.rectangle(550,220,250,20,{density:0.01,frictionAir:0.01,render:{fillStyle:'#e67e22'}}); let j=Constraint.create({bodyA:p,bodyB:bl,stiffness:1,length:0,render:{visible:false}}); blocks.push(p,bl); customConstraints.push(j); Composite.add(engine.world,[p,bl,j]); createBlock(450,330,20,80,'steel'); createPig(450,360,18,60+l*10); createBlock(650,330,20,80,'steel'); createPig(650,360,18,60+l*10); } },
-      { b: ['big','black','yellow'], cb: (l) => { createBlock(450,300,30,140,'steel'); createBlock(650,300,30,140,'steel'); createBlock(550,220,260,25,'steel'); createBlock(500,140,20,140,'stone'); createBlock(600,140,20,140,'stone'); createBlock(550,60,160,20,'stone'); createPig(550,320,35,100+l*20); createPig(550,180,20,50+l*10); } }
+function setupScene() {
+    Composite.clear(engine.world);
+    score = 0;
+    scoreEl.innerText = score;
+    isLaunched = false;
+
+    // 地面 (不設左右與上方邊界牆，讓鳥可自由飛出邊界)
+    const ground = Bodies.rectangle(width / 2, height - 20, width * 2, 60, { 
+        isStatic: true, 
+        render: { fillStyle: '#2ed573' },
+        label: 'ground'
+    });
+    Composite.add(engine.world, ground);
+
+    // 彈弓底座
+    const base = Bodies.rectangle(slingshotPos.x, slingshotPos.y + 60, 20, 120, {
+        isStatic: true,
+        render: { fillStyle: '#8B4513' },
+        collisionFilter: { group: -1 }
+    });
+    Composite.add(engine.world, base);
+
+    // 建立目標與小鳥
+    createTargets();
+    spawnBird();
+}
+
+function spawnBird() {
+    bird = Bodies.circle(slingshotPos.x, slingshotPos.y, 20, {
+        density: 0.004,
+        frictionAir: 0.005,
+        restitution: 0.4,
+        render: { fillStyle: '#ff4757' },
+        label: 'bird'
+    });
+
+    slingshot = Constraint.create({
+        pointA: slingshotPos,
+        bodyB: bird,
+        stiffness: 0.1,
+        damping: 0.01,
+        length: 0,
+        render: { strokeStyle: '#57606f', lineWidth: 5 }
+    });
+
+    Composite.add(engine.world, [bird, slingshot]);
+    isLaunched = false;
+}
+
+function createTargets() {
+    const startX = 650;
+    const startY = height - 80;
+
+    const blocks = [
+        Bodies.rectangle(startX, startY, 20, 100, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
+        Bodies.rectangle(startX + 120, startY, 20, 100, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
+        Bodies.rectangle(startX + 60, startY - 60, 140, 20, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
+        Bodies.rectangle(startX + 20, startY - 120, 20, 100, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
+        Bodies.rectangle(startX + 100, startY - 120, 20, 100, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
+        Bodies.rectangle(startX + 60, startY - 180, 120, 20, { render: { fillStyle: '#d2dae2' }, label: 'block' })
     ];
 
-    function toggleFullScreen() { 
-      let doc = window.document; let docEl = doc.documentElement;
-      let reqFS = docEl.requestFullscreen || docEl.webkitRequestFullScreen;
-      let canFS = doc.exitFullscreen || doc.webkitExitFullscreen;
-      if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
-        if (reqFS) reqFS.call(docEl).catch(err => { alert("目前瀏覽器不支援強制全螢幕，請將手機橫放即可獲得完美體驗！"); });
-        else alert("您的設備無法強制全螢幕，請將手機橫放遊玩！");
-      } else { if (canFS) canFS.call(doc); }
-    }
-    
-    function parseURLChallenge() {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('challenge')) {
-          let lvl = parseInt(params.get('level')), sc = parseInt(params.get('score'));
-          if (!isNaN(lvl) && !isNaN(sc)) {
-            isChallengeMode = true; rivalScore = sc; currentLevel = lvl; 
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById('btn-map-return').style.display = 'none'; 
-            document.getElementById('rival-indicator').style.display = 'block';
-            document.getElementById('rival-txt').textContent = rivalScore;
-            showOverlay("⚔️ 收到遠端挑戰帖！", `朋友在 Level ${lvl+1} 打出了 ${sc} 分！\n你有把握超越他嗎？`, [
-              { text: "🔥 接受挑戰！", colorClass: "btn-restart", action: () => {
-                if (!engine) initEngine();
-                document.getElementById('game-container').style.display = 'flex';
-                document.getElementById('ui-layer').style.display = 'flex';
-                loadLevel(currentLevel);
-              }}
-            ]);
-            return true;
-          }
+    const pigs = [
+        Bodies.circle(startX + 60, startY, 22, { render: { fillStyle: '#2ed573' }, label: 'pig' }),
+        Bodies.circle(startX + 60, startY - 120, 22, { render: { fillStyle: '#2ed573' }, label: 'pig' })
+    ];
+
+    Composite.add(engine.world, [...blocks, ...pigs]);
+}
+
+function setupMouse() {
+    const mouse = Mouse.create(render.canvas);
+    mouseConstraint = MouseConstraint.create(engine, {
+        mouse: mouse,
+        constraint: {
+            stiffness: 0.2,
+            render: { visible: false }
         }
-      } catch(e) {}
-      return false;
-    }
+    });
 
-    function shareChallengeLink() {
-      const shareUrl = `${window.location.origin}${window.location.pathname}?challenge=1&level=${currentLevel}&score=${myScore}`;
-      const shareText = `我在第 ${currentLevel + 1} 關打出了 ${myScore} 分！你能打破我的紀錄嗎？`;
-      if (navigator.share) {
-        navigator.share({ title: '憤怒鳥挑戰帖！', text: shareText, url: shareUrl }).catch(() => {});
-      } else if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(shareUrl).then(() => { alert('🔗 挑戰網址已複製！快傳給朋友！\n\n' + shareUrl); })
-          .catch(() => { prompt('請手動複製以下網址傳給朋友：', shareUrl); });
-      } else { prompt('請手動複製以下網址傳給朋友：', shareUrl); }
-    }
+    Composite.add(engine.world, mouseConstraint);
+    render.mouse = mouse;
 
-    function startGame() {
-      document.getElementById('main-menu').style.display = 'none';
-      currentMapPage = Math.floor(unlockedLevel / LEVELS_PER_MAP);
-      renderMap(); document.getElementById('map-screen').style.display = 'flex';
-      if (!engine) initEngine();
-    }
-
-    function showOverlay(title, msg, buttons) {
-      document.getElementById('overlay-title').textContent = title; document.getElementById('overlay-msg').innerText = msg;
-      const c = document.getElementById('overlay-btns'); c.innerHTML = '';
-      buttons.forEach(b => { 
-        const btn = document.createElement('button'); btn.className = `overlay-btn ${b.colorClass || 'btn-green'}`; 
-        btn.textContent = b.text; btn.onclick = () => { document.getElementById('overlay').style.display = 'none'; b.action(); }; 
-        c.appendChild(btn); 
-      });
-      document.getElementById('overlay').style.display = 'flex';
-    }
-
-    function openShop() { 
-      // 只要不是過關轉場，隨時可以開商店
-      document.getElementById('overlay').style.display = 'none'; 
-      document.getElementById('shop-overlay').style.display = 'flex'; 
-      renderShop(); 
-    }
-    
-    function closeShop() { 
-      document.getElementById('shop-overlay').style.display = 'none'; 
-      if (isLevelTransitioning && pigs.length > 0 && birdQueue.length === 0 && isLaunched) { 
-        checkLevelRules(); 
-      } 
-    }
-    
-    function renderShop() {
-      const g = document.getElementById('shop-grid'); g.innerHTML = ''; document.getElementById('shop-coins').innerText = coins;
-      for(let k in BIRD_TYPES) { 
-        let b = BIRD_TYPES[k], c = coins >= b.cost; 
-        g.innerHTML += `<div class="bird-card" style="opacity: ${c ? 1 : 0.6}"><div class="b-icon" style="background: ${b.color}; width: ${b.r*2}px; height: ${b.r*2}px;"></div><div class="b-name">${b.name}</div><div class="b-desc">${b.desc}</div><button class="btn-yellow" style="padding: 4px 12px; font-size:13px; margin-top: auto;" onclick="buyBird('${k}')" ${c?'':'disabled'}>${b.cost} 💰</button></div>`; 
-      }
-      let sc = 80, cbs = coins >= sc;
-      g.innerHTML += `<div class="bird-card" style="opacity: ${cbs ? 1 : 0.6}; border-color: #2ecc71;"><div class="b-icon" style="background: #2ecc71; width: 30px; height: 30px; border-radius: 8px; font-size: 16px;">⏭️</div><div class="b-name">快速過關</div><div class="b-desc">直接解鎖<br>下一關卡</div><button class="btn-green" style="padding: 4px 12px; font-size:13px; margin-top: auto;" onclick="buySkipLevel()" ${cbs?'':'disabled'}>${sc} 💰</button></div>`;
-    }
-    
-    // 【核心修復：秒買秒切換系統】
-    function buyBird(k) { 
-      let b = BIRD_TYPES[k]; 
-      if (coins < b.cost) return;
-      
-      coins -= b.cost; 
-      isLevelTransitioning = false; // 解除彈盡糧絕的死亡鎖定
-      
-      // 如果彈弓上原本有鳥（且還沒發射），把牠退回庫存排隊區
-      if (currentBird && !isLaunched) {
-        birdQueue.unshift(currentBird.bType);
-        Composite.remove(engine.world, currentBird);
-        if (currentSling) Composite.remove(engine.world, currentSling);
-        currentBird = null;
-        currentSling = null;
-      }
-      
-      // 將買來的新鳥放在隊列最前面
-      birdQueue.unshift(k);
-      
-      // 立刻召喚這隻新鳥上彈弓！
-      if (spawnTimeout) clearTimeout(spawnTimeout);
-      spawnBird();
-      
-      updateUI(); 
-      renderShop(); 
-    }
-    
-    function buySkipLevel() { let sc = 80; if (coins >= sc) { coins -= sc; closeShop(); forceWinLevel(); } }
-    
-    function forceWinLevel() { 
-      if (isLevelTransitioning && pigs.length === 0) return; 
-      isLevelTransitioning = true; pigs.forEach(p => Composite.remove(engine.world, p)); pigs = []; updateUI(); 
-      if (currentLevel === unlockedLevel) unlockedLevel++; 
-      setTimeout(() => { 
-        let r = 20; coins += r; 
-        showOverlay("⏭️ 鈔能力發動！", `你使用了快速過關跳過此局！\n\n基礎獎勵: +20 金幣\n總計獲得: ${r} 金幣！`, [ { text: "挑戰下一關", colorClass: "btn-green", action: () => loadLevel(currentLevel + 1) }, { text: "🔗 傳給朋友(發起挑戰)", colorClass: "btn-purple", action: () => shareChallengeLink() }, { text: "回地圖", colorClass: "btn-map", action: () => backToMap() } ]); 
-      }, 500); 
-    }
-
-    function changeMapPage(d) { currentMapPage += d; renderMap(); }
-    
-    function renderMap() {
-      document.getElementById('map-coins-txt').textContent = coins;
-      let sLvl = currentMapPage * LEVELS_PER_MAP + 1, eLvl = (currentMapPage + 1) * LEVELS_PER_MAP;
-      document.getElementById('map-subtitle-txt').textContent = `第 ${currentMapPage + 1} 世界 (${sLvl} - ${eLvl} 關)`;
-      let mW = Math.floor(unlockedLevel / LEVELS_PER_MAP);
-      document.getElementById('btn-prev-map').style.visibility = currentMapPage > 0 ? 'visible' : 'hidden';
-      document.getElementById('btn-next-map').style.visibility = currentMapPage < mW ? 'visible' : 'hidden';
-      const g = document.getElementById('level-grid'); g.innerHTML = '';
-      let sIdx = currentMapPage * LEVELS_PER_MAP, eIdx = sIdx + LEVELS_PER_MAP;
-      for (let i = sIdx; i < eIdx; i++) {
-        const b = document.createElement('div'); b.className = 'level-btn '; const nS = `<div class="level-num">Level ${i + 1}</div>`;
-        if (i < unlockedLevel) { b.className += 'level-cleared'; b.innerHTML = `✔️${nS}`; b.onclick = () => enterLevel(i); } 
-        else if (i === unlockedLevel) { b.className += 'level-unlocked'; b.innerHTML = `⭐${nS}`; b.onclick = () => enterLevel(i); } 
-        else { b.className += 'level-locked'; b.innerHTML = `🔒${nS}`; }
-        g.appendChild(b);
-      }
-    }
-    
-    function backToMap() { 
-      clearGameWorld(); document.getElementById('game-container').style.display = 'none'; 
-      document.getElementById('ui-layer').style.display = 'none'; document.getElementById('overlay').style.display = 'none'; 
-      currentMapPage = Math.floor(unlockedLevel / LEVELS_PER_MAP); renderMap(); document.getElementById('map-screen').style.display = 'flex'; 
-    }
-    
-    function enterLevel(i) { 
-      document.getElementById('map-screen').style.display = 'none'; 
-      document.getElementById('game-container').style.display = 'flex'; 
-      document.getElementById('ui-layer').style.display = 'flex'; 
-      loadLevel(i); 
-    }
-
-    function getCanvasPos(e) {
-      const rect = canvas.getBoundingClientRect();
-      const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
-      return {
-        x: (clientX - rect.left) * (WIDTH / rect.width),
-        y: (clientY - rect.top) * (HEIGHT / rect.height)
-      };
-    }
-
-    function initEngine() {
-      engine = Engine.create({ gravity: { x: 0, y: 1.1 } }); 
-      canvas.width = WIDTH; canvas.height = HEIGHT;
-      render = Render.create({ canvas: canvas, engine: engine, options: { width: WIDTH, height: HEIGHT, wireframes: false, background: 'transparent' } });
-      Runner.run(Runner.create(), engine); Render.run(render);
-
-      const ground = Bodies.rectangle(400, 370, 800, 40, { isStatic: true, render: { fillStyle: '#2d3436' } });
-      const slingBase = Bodies.rectangle(130, 335, 15, 70, { isStatic: true, isSensor: true, render: { fillStyle: '#8e44ad', strokeStyle: '#fff', lineWidth: 2 } });
-      const lw = Bodies.rectangle(-20, 200, 40, 400, { isStatic: true }), rw = Bodies.rectangle(820, 200, 40, 400, { isStatic: true });
-      Composite.add(engine.world, [ground, slingBase, lw, rw]);
-
-      canvas.addEventListener('touchstart', handleStart, { passive: false });
-      canvas.addEventListener('mousedown', handleStart, { passive: false });
-      window.addEventListener('touchmove', handleMove, { passive: false });
-      window.addEventListener('mousemove', handleMove, { passive: false });
-      window.addEventListener('touchend', handleEnd, { passive: false });
-      window.addEventListener('mouseup', handleEnd, { passive: false });
-
-      function handleStart(e) {
-        if (e.target !== canvas && e.target.tagName !== 'CANVAS') return; // 不要阻擋 UI 按鈕
-        if (e.type === 'touchstart') e.preventDefault();
-        if (isLevelTransitioning || !levelReady || !currentBird) return;
-        
-        let pos = getCanvasPos(e);
-
-        if (isLaunched && canSkill) {
-          canSkill = false;
-          if (currentBird.bType === 'black') {
-             Composite.allBodies(engine.world).forEach(b => {
-               if (!b.isStatic) {
-                 const d = Vector.magnitude(Vector.sub(b.position, currentBird.position));
-                 if (d < 180 && d > 0) Body.applyForce(b, b.position, Vector.mult(Vector.normalise(Vector.sub(b.position, currentBird.position)), 0.3 * (1 - d/180)));
-               }
-             });
-             currentBird.render.fillStyle = '#f1c40f'; 
-          } else if (currentBird.bType === 'yellow') {
-             Body.applyForce(currentBird, currentBird.position, Vector.mult(Vector.normalise(currentBird.velocity), 0.25));
-          } else if (currentBird.bType === 'red') {
-             Body.applyForce(currentBird, currentBird.position, Vector.mult(Vector.normalise(currentBird.velocity), 0.08));
-          }
-          return;
+    Events.on(mouseConstraint, 'enddrag', (event) => {
+        if (event.body === bird) {
+            isLaunched = true;
+            setTimeout(() => {
+                slingshot.bodyB = null;
+            }, 60);
         }
+    });
+}
 
-        if (!isLaunched) {
-          let dist = Vector.magnitude(Vector.sub(pos, slingAnchor));
-          if (dist < 70) {
-            isDragging = true;
-          }
-        }
-      }
+function checkBirdOutOfBounds() {
+    if (!bird) return;
 
-      function handleMove(e) {
-        if (!isDragging || !currentBird) return;
-        if (e.type === 'touchmove') e.preventDefault();
-        
-        let pos = getCanvasPos(e);
-        let diff = Vector.sub(pos, slingAnchor);
-        
-        if (Vector.magnitude(diff) > MAX_PULL_DISTANCE) {
-          diff = Vector.mult(Vector.normalise(diff), MAX_PULL_DISTANCE);
-        }
-        
-        let target = Vector.add(slingAnchor, diff);
-        if (target.y > 330) target.y = 330;
-        if (target.x > slingAnchor.x + 20) target.x = slingAnchor.x + 20;
+    const pos = bird.position;
+    // 小鳥飛出螢幕範圍邊界時，立刻重新生成新鳥
+    const isOutOfBounds = pos.x < -50 || pos.x > width + 50 || pos.y < -100 || pos.y > height + 50;
+    
+    if (isLaunched && isOutOfBounds) {
+        reloadBird();
+    }
+}
 
-        Body.setPosition(currentBird, target);
-      }
+function reloadBird() {
+    Composite.remove(engine.world, bird);
+    slingshot.bodyB = null;
+    spawnBird();
+}
 
-      function handleEnd(e) {
-        if (!isDragging || !currentBird) return;
-        isDragging = false;
-        
-        let diff = Vector.sub(slingAnchor, currentBird.position);
-        if (Vector.magnitude(diff) > 20) {
-          isLaunched = true; 
-          canSkill = true;
-          if (spawnTimeout) clearTimeout(spawnTimeout);
-          spawnTimeout = setTimeout(spawnNextBird, 4000);
-        } else {
-          Body.setPosition(currentBird, slingAnchor);
-        }
-      }
-
-      Events.on(engine, 'afterUpdate', () => {
-        if (isLaunched && currentSling && currentSling.bodyB) {
-          if (currentBird.position.x > slingAnchor.x || Vector.magnitude(Vector.sub(currentBird.position, slingAnchor)) < 15) {
-            currentSling.bodyB = null; 
-            Composite.remove(engine.world, currentSling); 
-            currentSling = null;
-          }
-        }
-      });
-
-      Events.on(engine, 'collisionStart', (e) => {
-        if (!levelReady) return; 
-        e.pairs.forEach(p => {
-          if (!isLaunched && currentBird && (p.bodyA === currentBird || p.bodyB === currentBird)) return;
-          pigs.forEach(pg => {
-            if (p.bodyA === pg || p.bodyB === pg) {
-              const sa = Vector.magnitude(p.bodyA.velocity), sb = Vector.magnitude(p.bodyB.velocity);
-              if (Math.max(sa, sb) > 1.8) {
-                pg.hp -= Math.max(sa, sb) * 15; 
-                if(pg.hp <= 0) myScore += 1000; 
-              }
+function handleCollisions(event) {
+    event.pairs.forEach(pair => {
+        const { bodyA, bodyB } = pair;
+        [bodyA, bodyB].forEach(body => {
+            if (body.label === 'pig' && body.speed > 3) {
+                Composite.remove(engine.world, body);
+                score += 100;
+                scoreEl.innerText = score;
             }
-          });
         });
-      });
+    });
+}
 
-      Events.on(engine, 'beforeUpdate', () => {
-        if (currentBird && !isLaunched && !isDragging) {
-           Body.setPosition(currentBird, slingAnchor); 
-           Body.setVelocity(currentBird, { x: 0, y: 0 });
-        }
-        for (let i = pigs.length - 1; i >= 0; i--) { 
-          if (pigs[i].hp <= 0 || pigs[i].position.y > HEIGHT + 50) { 
-            Composite.remove(engine.world, pigs[i]); pigs.splice(i, 1); 
-          } 
-        }
-        if(document.getElementById('game-container').style.display !== 'none') { updateUI(); checkLevelRules(); }
-      });
-    }
-
-    function createBlock(x, y, w, h, t = 'wood', opt = {}) { let c = t==='steel'?'#34495e':(t==='stone'?'#95a5a6':'#d35400'), d = t==='steel'?0.02:(t==='stone'?0.005:0.001); const blk = Bodies.rectangle(x, y, w, h, Object.assign({ density: d, friction: 0.5, render: { fillStyle: c, strokeStyle: '#111', lineWidth: 1 } }, opt)); blocks.push(blk); Composite.add(engine.world, blk); }
-    function createPig(x, y, r, hp = 30) { const p = Bodies.circle(x, y, r, { density: 0.001, friction: 0.3, restitution: 0.2, render: { fillStyle: '#2ecc71', strokeStyle: '#27ae60', lineWidth: 2 } }); p.hp = hp; pigs.push(p); Composite.add(engine.world, p); }
-
-    function generateLevel(idx) {
-      let di = idx % LEVEL_DESIGNS.length, lc = Math.floor(idx / LEVEL_DESIGNS.length), ds = LEVEL_DESIGNS[di];
-      if (ds.cb) { ds.cb(lc); } else { 
-        ds.t.forEach(tw => { 
-          let cy = 350; 
-          for (let h = 0; h < tw.h; h++) { 
-            createBlock(tw.x, cy - 40, 15, 80, tw.m); 
-            createBlock(tw.x + 50, cy - 40, 15, 80, tw.m); 
-            if (h === tw.h - 1 || (h % 2 === 0)) createPig(tw.x + 25, cy - 15, 14, 30 + idx * 10); 
-            createBlock(tw.x + 25, cy - 87.5, 90, 15, tw.m); 
-            cy -= 95; 
-          } 
-        }); 
-      }
-      let q = [...ds.b]; for(let i=0; i<lc; i++) q.push('red'); return q;
-    }
-
-    function spawnBird() {
-      if (birdQueue.length === 0) return; 
-      let tk = birdQueue.shift(), bd = BIRD_TYPES[tk]; isLaunched = false; canSkill = false;
-      
-      currentBird = Bodies.circle(slingAnchor.x, slingAnchor.y, bd.r, { 
-        density: bd.density, friction: 0.2, restitution: bd.rest, 
-        render: { fillStyle: bd.color, strokeStyle: '#ecf0f1', lineWidth: 2 } 
-      }); 
-      currentBird.bType = tk; allBirds.push(currentBird); 
-      
-      currentSling = Constraint.create({ 
-        pointA: slingAnchor, bodyB: currentBird, stiffness: 0.05, length: 0, 
-        render: { visible: true, strokeStyle: '#aaa', lineWidth: 3 } 
-      });
-      Composite.add(engine.world, [currentBird, currentSling]);
-    }
+function resizeCanvas() {
+    const canvas = render.canvas;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
     
-    function spawnNextBird() { 
-      if (pigs.length > 0 && birdQueue.length > 0 && !isLevelTransitioning) { 
-        spawnBird();
-      } 
-    }
-    
-    function clearGameWorld() { 
-      if (spawnTimeout) clearTimeout(spawnTimeout); 
-      pigs.forEach(p => Composite.remove(engine.world, p)); 
-      blocks.forEach(b => Composite.remove(engine.world, b)); 
-      allBirds.forEach(b => Composite.remove(engine.world, b)); 
-      customConstraints.forEach(c => Composite.remove(engine.world, c)); 
-      if(currentSling) Composite.remove(engine.world, currentSling); 
-      pigs = []; blocks = []; allBirds = []; customConstraints = []; currentSling = null; currentBird = null; 
-    }
+    canvas.style.width = `${containerWidth}px`;
+    canvas.style.height = `${containerHeight}px`;
+}
 
-    function loadLevel(idx) { 
-      isLevelTransitioning = true; levelReady = false; currentLevel = idx; myScore = 0;
-      clearGameWorld(); birdQueue = generateLevel(currentLevel); 
-      spawnBird(); setTimeout(() => { isLevelTransitioning = false; levelReady = true; }, 500); 
-    }
+function resetGame() {
+    setupScene();
+}
 
-    function checkLevelRules() {
-      if (isLevelTransitioning || !levelReady) return;
-      if (pigs.length === 0) {
-        isLevelTransitioning = true; if (currentLevel === unlockedLevel && !isChallengeMode) unlockedLevel++;
-        setTimeout(() => { 
-          let birdBonus = birdQueue.length * 500; myScore += birdBonus;
-          let tr = 20 + (birdQueue.length * 5); coins += tr; 
-          
-          if (isChallengeMode) {
-            let msg = `你的總分: ${myScore}\n對手分數: ${rivalScore}\n\n`;
-            if (myScore > rivalScore) msg += `🏆 太神啦！你贏了對手！`;
-            else if (myScore === rivalScore) msg += `🤝 居然是平手！`;
-            else msg += `💀 挑戰失敗... 再接再厲！`;
-            showOverlay("⚔️ 遠端挑戰結束！", msg, [
-              { text: "🔄 再挑戰一次", colorClass: "btn-restart", action: () => loadLevel(currentLevel) },
-              { text: "🔗 發起我的挑戰 (傳給朋友)", colorClass: "btn-purple", action: () => shareChallengeLink() }
-            ]);
-          } else {
-            showOverlay("🎉 關卡完成！", `基礎過關 + 擊殺加分\n節省鳥類: +${birdBonus} 分\n\n🏆 本局總分: ${myScore}\n💰 獲得金幣: ${tr}`, [ 
-              { text: "挑戰下一關", colorClass: "btn-green", action: () => loadLevel(currentLevel + 1) }, 
-              { text: "🔗 傳給朋友(發起挑戰)", colorClass: "btn-purple", action: () => shareChallengeLink() },
-              { text: "回地圖", colorClass: "btn-map", action: () => backToMap() } 
-            ]); 
-          }
-        }, 1000); 
-      } 
-      else if (birdQueue.length === 0 && isLaunched && pigs.length > 0 && currentBird) {
-        const sp = Vector.magnitude(currentBird.velocity);
-        if (sp < 0.1 || currentBird.position.x > WIDTH + 100 || currentBird.position.y > HEIGHT + 50) {
-          isLevelTransitioning = true;
-          setTimeout(() => {
-            if (birdQueue.length > 0 || !isLaunched) { isLevelTransitioning = false; return; }
-            if (pigs.length > 0) { 
-              if(isChallengeMode) {
-                showOverlay("💀 挑戰失敗", `你的分數: ${myScore}\n對手分數: ${rivalScore}\n\n你沒有消滅所有綠豬...`, [
-                  { text: "🔄 再試一次", colorClass: "btn-restart", action: () => loadLevel(currentLevel) },
-                  { text: "回地圖", colorClass: "btn-map", action: () => { isChallengeMode=false; backToMap(); } }
-                ]);
-              } else {
-                // 【觸發復活選單】
-                showOverlay("💀 彈藥耗盡！", `你還有 ${coins} 枚金幣，要進商店買鳥逆轉嗎？`, [ 
-                  { text: "🛒 打開鳥店復活", colorClass: "btn-yellow", action: () => openShop() }, 
-                  { text: "重新挑戰", colorClass: "btn-restart", action: () => loadLevel(currentLevel) }, 
-                  { text: "回地圖", colorClass: "btn-map", action: () => backToMap() } 
-                ]); 
-              }
-            } else { isLevelTransitioning = false; }
-          }, 1500); 
-        }
-      }
-    }
-    
-    function restartLevel() { if (!isLevelTransitioning && levelReady) loadLevel(currentLevel); }
-    
-    function updateUI() {
-      document.getElementById('lvl-txt').textContent = currentLevel + 1; 
-      document.getElementById('birds-txt').textContent = birdQueue.length + (currentBird && !isLaunched ? 1 : 0); 
-      document.getElementById('pigs-txt').textContent = pigs.length; 
-      document.getElementById('coins-txt').textContent = coins;
-      document.getElementById('score-txt').textContent = myScore;
-    }
-
-    window.onload = () => {
-      if (!parseURLChallenge()) {
-         document.getElementById('main-menu').style.display = 'flex';
-      }
-    };
-  </script>
+window.onload = init;
+</script>
 </body>
 </html>
