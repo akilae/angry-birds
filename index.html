@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>憤怒鳥 - 介面與彈弓完整修正版</title>
+    <title>憤怒鳥 - 彈弓物理完美修正版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         * {
@@ -38,59 +38,49 @@
             height: 100% !important;
             display: block;
         }
-        #top-bar {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            pointer-events: none;
-            z-index: 10;
-        }
         #ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
             color: #fff;
-            font-size: 15px;
+            font-size: 18px;
             font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            pointer-events: none;
             display: flex;
             flex-direction: column;
-            gap: 2px;
-            background: rgba(0, 0, 0, 0.25);
-            padding: 6px 10px;
-            border-radius: 8px;
+            gap: 4px;
         }
         .level-ui { color: #00d2d3; }
         .map-ui { color: #ff9ff3; }
-        .birds-ui { color: #ff6b6b; font-size: 16px; }
+        .birds-ui { color: #ff6b6b; font-size: 20px; }
         .coin-ui { color: #ffd700; }
-        
         #author {
             position: absolute;
             bottom: 10px;
             left: 15px;
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
             font-weight: bold;
             text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
             pointer-events: none;
-            z-index: 10;
         }
         .btn-group {
+            position: absolute;
+            top: 15px;
+            right: 15px;
             display: flex;
-            gap: 6px;
-            pointer-events: auto;
+            gap: 8px;
         }
         .game-btn {
-            padding: 6px 10px;
-            font-size: 13px;
+            padding: 8px 14px;
+            font-size: 14px;
             font-weight: bold;
             color: white;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
-            box-shadow: 0 3px 5px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             touch-action: manipulation;
         }
         #shop-btn { background-color: #2ed573; }
@@ -109,7 +99,7 @@
             border-radius: 12px;
             padding: 20px 30px;
             color: #ffd700;
-            font-size: 20px;
+            font-size: 22px;
             font-weight: bold;
             text-align: center;
             z-index: 90;
@@ -119,7 +109,7 @@
         #msg-modal button {
             margin-top: 15px;
             padding: 8px 20px;
-            font-size: 15px;
+            font-size: 16px;
             background: #2ed573;
             border: none;
             border-radius: 6px;
@@ -127,7 +117,9 @@
             font-weight: bold;
             cursor: pointer;
         }
-        #msg-modal button.retry-btn { background: #ff4757; }
+        #msg-modal button.retry-btn {
+            background: #ff4757;
+        }
 
         #shop-modal {
             display: none;
@@ -135,25 +127,25 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 340px;
-            max-height: 85vh;
+            width: 380px;
+            max-height: 90vh;
             overflow-y: auto;
             background: rgba(0, 0, 0, 0.95);
             border: 2px solid #2ed573;
             border-radius: 12px;
-            padding: 16px;
+            padding: 18px;
             color: white;
             z-index: 100;
             box-shadow: 0 8px 16px rgba(0,0,0,0.6);
         }
         #shop-modal h3 {
             text-align: center;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             color: #2ed573;
         }
         .shop-section h4 {
             margin-bottom: 8px;
-            font-size: 13px;
+            font-size: 14px;
             color: #ddd;
             display: flex;
             justify-content: space-between;
@@ -171,7 +163,7 @@
             text-align: center;
             cursor: pointer;
             font-size: 12px;
-            line-height: 1.3;
+            line-height: 1.4;
         }
         .shop-item.active {
             border-color: #2ed573;
@@ -190,39 +182,29 @@
         }
         .modal-btn {
             width: 100%;
-            padding: 8px;
+            padding: 10px;
             margin-top: 8px;
             border: none;
             border-radius: 6px;
             font-weight: bold;
             cursor: pointer;
             color: white;
-            font-size: 13px;
         }
         .skip-btn { background-color: #ffa502; }
         .unlock-btn { background-color: #2ed573; color: #000; }
-        .back-btn { background-color: #3742fa; }
         .close-btn { background-color: #747d8c; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
-    <div id="top-bar">
-        <div id="ui">
-            <div class="map-ui">🗺️ 地圖: <span id="map-display">晴空草原</span></div>
-            <div class="level-ui">🚩 關卡: <span id="level-display">1</span></div>
-            <div class="birds-ui">🎯 剩餘鳥數: <span id="birds-display">3</span></div>
-            <div>得分: <span id="score">0</span></div>
-            <div class="coin-ui">💰 金幣: <span id="coins">200</span></div>
-        </div>
-        <div class="btn-group">
-            <button id="shop-btn" class="game-btn" onclick="openShopModal()">🏪 鳥店</button>
-            <button id="admin-btn" class="game-btn" onclick="openAdminAuth()">👑 後台</button>
-            <button id="reset-btn" class="game-btn" onclick="resetCurrentLevel()">重置</button>
-        </div>
+    <div id="ui">
+        <div class="map-ui">🗺️ 地圖: <span id="map-display">晴空草原</span></div>
+        <div class="level-ui">🚩 關卡: <span id="level-display">1</span></div>
+        <div class="birds-ui">🎯 剩餘鳥數: <span id="birds-display">3</span></div>
+        <div>得分: <span id="score">0</span></div>
+        <div class="coin-ui">💰 金幣: <span id="coins">200</span></div>
     </div>
-
     <div id="author">作者：李御銘</div>
     
     <div id="msg-modal">
@@ -230,30 +212,35 @@
         <button id="modal-action-btn" onclick="nextLevel()">進入下一關 ➔</button>
     </div>
 
-    <!-- 鳥店與後台彈窗 -->
+    <div class="btn-group">
+        <button id="shop-btn" class="game-btn" onclick="openShopModal()">🏪 鳥店</button>
+        <button id="admin-btn" class="game-btn" onclick="openAdminAuth()">👑 後台</button>
+        <button id="reset-btn" class="game-btn" onclick="resetCurrentLevel()">重置關卡</button>
+    </div>
+
+    <!-- 鳥店彈窗 -->
     <div id="shop-modal">
         <h3 id="modal-title">🏪 鳥店購物</h3>
         
         <div class="shop-section">
             <h4>
-                <span>選擇/購買小鳥</span>
+                <span>選擇/購買小鳥（越貴越強）</span>
                 <span class="coin-ui">💰 <span id="modal-coins">200</span></span>
             </h4>
             <div class="shop-grid" id="shop-grid"></div>
         </div>
 
         <div id="admin-controls" style="display: none;">
-            <button class="modal-btn unlock-btn" onclick="adminUnlockAll()">🔓 免費解鎖全鳥</button>
-            <button class="modal-btn skip-btn" onclick="adminSkip()">⏩ 快速跳關</button>
-            <button class="modal-btn back-btn" onclick="switchToNormalShop()">⬅️ 返回鳥店</button>
+            <button class="modal-btn unlock-btn" onclick="adminUnlockAll()">🔓 管理員一鍵免費解鎖全鳥</button>
+            <button class="modal-btn skip-btn" onclick="adminSkip()">⏩ 執行跳關 (可賺金幣)</button>
         </div>
 
-        <button class="modal-btn close-btn" onclick="closeShopModal()">❌ 關閉</button>
+        <button class="modal-btn close-btn" onclick="closeShopModal()">❌ 關閉鳥店</button>
     </div>
 </div>
 
 <script>
-const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Body, Vector } = Matter;
+const { Engine, Render, Runner, Bodies, Composite, Constraint, Mouse, MouseConstraint, Events, Body, Vector } = Matter;
 
 const container = document.getElementById('game-container');
 const mapEl = document.getElementById('map-display');
@@ -270,7 +257,7 @@ const shopGrid = document.getElementById('shop-grid');
 const adminControls = document.getElementById('admin-controls');
 
 let engine, render, runner, mouseConstraint;
-let bird = null;
+let bird = null, slingshot = null;
 let isDragging = false, isLaunched = false;
 let score = 0, coins = 200, currentLevel = 1, pigCount = 0;
 let remainingBirds = 0;
@@ -284,8 +271,8 @@ let currentBirdType = 'red';
 
 const width = 1024;
 const height = 768;
-const slingshotPos = { x: 180, y: 550 };
-const maxStretch = 100;
+const slingshotPos = { x: 180, y: 530 };
+const maxStretch = 100; // 彈弓最大拉扯距離
 
 const themeMaps = [
     { name: '晴空草原', bg: '#87CEEB', ground: '#2ed573' },
@@ -325,6 +312,7 @@ function init() {
 
     Events.on(engine, 'afterUpdate', handleEngineUpdate);
     Events.on(engine, 'collisionStart', handleCollisions);
+
     Events.on(render, 'afterRender', drawCustomSlingshotAndTrajectory);
 
     window.addEventListener('resize', resizeCanvas);
@@ -374,18 +362,17 @@ function setupScene() {
 }
 
 function createSlingshotStructure() {
-    // 建立穩固的彈弓基座與雙臂
-    const base = Bodies.rectangle(slingshotPos.x, slingshotPos.y + 70, 18, 140, {
+    const base = Bodies.rectangle(slingshotPos.x, slingshotPos.y + 70, 20, 140, {
         isStatic: true,
         render: { fillStyle: '#5c2c16' },
         collisionFilter: { group: -1 }
     });
-    const forkLeft = Bodies.rectangle(slingshotPos.x - 12, slingshotPos.y, 10, 45, {
+    const forkLeft = Bodies.rectangle(slingshotPos.x - 15, slingshotPos.y, 12, 50, {
         isStatic: true,
         render: { fillStyle: '#7d3c1b' },
         collisionFilter: { group: -1 }
     });
-    const forkRight = Bodies.rectangle(slingshotPos.x + 12, slingshotPos.y, 10, 45, {
+    const forkRight = Bodies.rectangle(slingshotPos.x + 15, slingshotPos.y, 12, 50, {
         isStatic: true,
         render: { fillStyle: '#7d3c1b' },
         collisionFilter: { group: -1 }
@@ -405,7 +392,7 @@ function spawnBird() {
         restitution: config.restitution,
         render: { fillStyle: config.color },
         label: 'bird',
-        isStatic: true
+        isStatic: true // 初始靜止在彈弓上
     });
 
     Composite.add(engine.world, bird);
@@ -439,6 +426,7 @@ function setupMouseControls() {
 
 function handleEngineUpdate() {
     if (isDragging && bird && !isLaunched) {
+        // 限制拉扯半徑
         const mousePos = mouseConstraint.mouse.position;
         const delta = Vector.sub(mousePos, slingshotPos);
         const distance = Vector.magnitude(delta);
@@ -453,6 +441,7 @@ function handleEngineUpdate() {
 
     if (isLaunched && bird) {
         const pos = bird.position;
+        // 飛出螢幕邊界處理
         if (pos.x < -100 || pos.x > width + 100 || pos.y < -100 || pos.y > height + 50) {
             if (reloadedTimeout) clearTimeout(reloadedTimeout);
             checkNextBirdOrGameover();
@@ -465,6 +454,7 @@ function launchBird() {
     remainingBirds--;
     birdsEl.innerText = remainingBirds;
 
+    // 計算發射向量與衝量
     const delta = Vector.sub(slingshotPos, bird.position);
     const launchForce = 0.12;
 
@@ -478,36 +468,36 @@ function launchBird() {
 function drawCustomSlingshotAndTrajectory() {
     const ctx = render.context;
 
-    // 1. 精準繪製彈弓橡皮筋，防止連到頂部線條
-    if (bird && !isLaunched) {
+    // 1. 繪製彈弓皮筋
+    if (bird && (!isLaunched || Vector.magnitude(Vector.sub(bird.position, slingshotPos)) < 60)) {
         ctx.save();
         ctx.strokeStyle = '#301c11';
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 6;
         ctx.beginPath();
-        ctx.moveTo(slingshotPos.x - 12, slingshotPos.y - 10);
+        ctx.moveTo(slingshotPos.x - 15, slingshotPos.y - 15);
         ctx.lineTo(bird.position.x, bird.position.y);
-        ctx.lineTo(slingshotPos.x + 12, slingshotPos.y - 10);
+        ctx.lineTo(slingshotPos.x + 15, slingshotPos.y - 15);
         ctx.stroke();
         ctx.restore();
     }
 
-    // 2. 拉扯時繪製預測軌跡虛線
+    // 2. 繪製拉扯時的預測軌跡虛線
     if (isDragging && bird) {
         ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
         ctx.lineWidth = 3;
-        ctx.setLineDash([5, 5]);
+        ctx.setLineDash([6, 6]);
 
         const delta = Vector.sub(slingshotPos, bird.position);
         let simPos = { x: bird.position.x, y: bird.position.y };
-        let simVel = Vector.mult(delta, 0.22);
+        let simVel = Vector.mult(delta, 0.22); // 估算初速度
 
         ctx.beginPath();
         ctx.moveTo(simPos.x, simPos.y);
         for (let i = 0; i < 25; i++) {
             simPos.x += simVel.x;
             simPos.y += simVel.y;
-            simVel.y += 0.45;
+            simVel.y += 0.45; // 模擬重力
             ctx.lineTo(simPos.x, simPos.y);
         }
         ctx.stroke();
@@ -628,7 +618,7 @@ function levelComplete() {
 
 function gameOver() {
     if (reloadedTimeout) clearTimeout(reloadedTimeout);
-    msgText.innerText = `💥 任務失敗！\n限定的小鳥已用盡，還有 ${pigCount} 隻綠豬存活。`;
+    msgText.innerText = `💥 任務失敗！\n限定的小鳥已全部用盡，還有 ${pigCount} 隻綠豬存活。`;
     modalActionBtn.innerText = "重新挑戰 🔄";
     modalActionBtn.className = "retry-btn";
     modalActionBtn.onclick = resetCurrentLevel;
@@ -695,15 +685,11 @@ function selectOrBuyBird(key) {
 }
 
 function openShopModal() {
-    switchToNormalShop();
-    shopModal.style.display = 'block';
-}
-
-function switchToNormalShop() {
     modalCoinsEl.innerText = coins;
     document.getElementById('modal-title').innerText = '🏪 鳥店購物';
     adminControls.style.display = 'none';
     renderShopItems();
+    shopModal.style.display = 'block';
 }
 
 function openAdminAuth() {
