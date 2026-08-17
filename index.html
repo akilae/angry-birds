@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>憤怒鳥 - 2D物理遊戲</title>
+    <title>憤怒鳥 - 限鳥挑戰與地圖變幻版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         * {
@@ -31,6 +31,7 @@
             max-width: 1024px;
             max-height: 768px;
             background: #87CEEB;
+            transition: background 1s ease;
         }
         canvas {
             width: 100% !important;
@@ -42,11 +43,18 @@
             top: 15px;
             left: 15px;
             color: #fff;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
             pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
+        .level-ui { color: #00d2d3; }
+        .map-ui { color: #ff9ff3; }
+        .birds-ui { color: #ff6b6b; font-size: 20px; }
+        .coin-ui { color: #ffd700; }
         #author {
             position: absolute;
             bottom: 10px;
@@ -57,14 +65,17 @@
             text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
             pointer-events: none;
         }
-        #reset-btn {
+        .btn-group {
             position: absolute;
             top: 15px;
             right: 15px;
-            padding: 10px 20px;
-            font-size: 16px;
+            display: flex;
+            gap: 8px;
+        }
+        .game-btn {
+            padding: 8px 14px;
+            font-size: 14px;
             font-weight: bold;
-            background-color: #ff4757;
             color: white;
             border: none;
             border-radius: 8px;
@@ -72,28 +83,212 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             touch-action: manipulation;
         }
-        #reset-btn:active {
-            transform: scale(0.95);
+        #shop-btn { background-color: #2ed573; }
+        #reset-btn { background-color: #ff4757; }
+        #admin-btn { background-color: #ffa502; }
+        .game-btn:active { transform: scale(0.95); }
+        
+        #msg-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.92);
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            padding: 20px 30px;
+            color: #ffd700;
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            z-index: 90;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.7);
+            white-space: pre-line;
         }
+        #msg-modal button {
+            margin-top: 15px;
+            padding: 8px 20px;
+            font-size: 16px;
+            background: #2ed573;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #msg-modal button.retry-btn {
+            background: #ff4757;
+        }
+
+        #shop-modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 380px;
+            max-height: 90vh;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.95);
+            border: 2px solid #2ed573;
+            border-radius: 12px;
+            padding: 18px;
+            color: white;
+            z-index: 100;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.6);
+        }
+        #shop-modal h3 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #2ed573;
+        }
+        .shop-section h4 {
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #ddd;
+            display: flex;
+            justify-content: space-between;
+        }
+        .shop-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        .shop-item {
+            padding: 8px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 6px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .shop-item.active {
+            border-color: #2ed573;
+            background: #1e8449;
+        }
+        .shop-item.locked {
+            background: #222;
+            border-color: #444;
+            color: #aaa;
+        }
+        .price-tag {
+            color: #ffd700;
+            font-weight: bold;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+        .modal-btn {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+        }
+        .skip-btn { background-color: #ffa502; }
+        .unlock-btn { background-color: #2ed573; color: #000; }
+        .close-btn { background-color: #747d8c; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
-    <div id="ui">得分: <span id="score">0</span></div>
+    <div id="ui">
+        <div class="map-ui">🗺️ 地圖: <span id="map-display">晴空草原</span></div>
+        <div class="level-ui">🚩 關卡: <span id="level-display">1</span></div>
+        <div class="birds-ui">🎯 剩餘鳥數: <span id="birds-display">3</span></div>
+        <div>得分: <span id="score">0</span></div>
+        <div class="coin-ui">💰 金幣: <span id="coins">200</span></div>
+    </div>
     <div id="author">作者：李御銘</div>
-    <button id="reset-btn" onclick="resetGame()">重置關卡</button>
+    
+    <div id="msg-modal">
+        <div id="msg-text">🎉 突破關卡！ 🎉</div>
+        <button id="modal-action-btn" onclick="nextLevel()">進入下一關 ➔</button>
+    </div>
+
+    <div class="btn-group">
+        <button id="shop-btn" class="game-btn" onclick="openShopModal()">🏪 鳥店</button>
+        <button id="admin-btn" class="game-btn" onclick="openAdminAuth()">👑 後台</button>
+        <button id="reset-btn" class="game-btn" onclick="resetCurrentLevel()">重置關卡</button>
+    </div>
+
+    <!-- 鳥店彈窗 -->
+    <div id="shop-modal">
+        <h3 id="modal-title">🏪 鳥店購物</h3>
+        
+        <div class="shop-section">
+            <h4>
+                <span>選擇/購買小鳥（越貴越強）</span>
+                <span class="coin-ui">💰 <span id="modal-coins">200</span></span>
+            </h4>
+            <div class="shop-grid" id="shop-grid"></div>
+        </div>
+
+        <div id="admin-controls" style="display: none;">
+            <button class="modal-btn unlock-btn" onclick="adminUnlockAll()">🔓 管理員一鍵免費解鎖全鳥</button>
+            <button class="modal-btn skip-btn" onclick="adminSkip()">⏩ 執行跳關 (可賺金幣)</button>
+        </div>
+
+        <button class="modal-btn close-btn" onclick="closeShopModal()">❌ 關閉鳥店</button>
+    </div>
 </div>
 
 <script>
 const { Engine, Render, Runner, Bodies, Composite, Constraint, Mouse, MouseConstraint, Events } = Matter;
 
 const container = document.getElementById('game-container');
+const mapEl = document.getElementById('map-display');
+const levelEl = document.getElementById('level-display');
+const birdsEl = document.getElementById('birds-display');
 const scoreEl = document.getElementById('score');
+const coinsEl = document.getElementById('coins');
+const modalCoinsEl = document.getElementById('modal-coins');
+const msgModal = document.getElementById('msg-modal');
+const msgText = document.getElementById('msg-text');
+const modalActionBtn = document.getElementById('modal-action-btn');
+const shopModal = document.getElementById('shop-modal');
+const shopGrid = document.getElementById('shop-grid');
+const adminControls = document.getElementById('admin-controls');
 
 let engine, render, runner, mouseConstraint;
 let bird, slingshot, isLaunched = false;
-let score = 0;
+let score = 0, coins = 200, currentLevel = 1, pigCount = 0;
+let remainingBirds = 0;
+let levelMaxBirds = 3;
+let groundBody = null;
+let reloadedTimeout = null;
+
+const ADMIN_PASSWORD = '20170731';
+let isAdminAuthenticated = false;
+let currentBirdType = 'red';
+
+// 4 大主題地圖設定 (每 30 關切換)
+const themeMaps = [
+    { name: '晴空草原', bg: '#87CEEB', ground: '#2ed573' },
+    { name: '夕陽荒漠', bg: '#e67e22', ground: '#d35400' },
+    { name: '暗夜紫空', bg: '#2c3e50', ground: '#8e44ad' },
+    { name: '極地冰原', bg: '#74b9ff', ground: '#dfe6e9' }
+];
+
+// 10 種小鳥屬性
+const birdConfig = {
+    red:    { name: '🔴 紅鳥', price: 0,    desc: '免費初始鳥', radius: 20, density: 0.004, restitution: 0.4, color: '#ff4757', unlocked: true },
+    pink:   { name: '🩷 粉鳥', price: 50,   desc: '輕盈靈巧型', radius: 14, density: 0.002, restitution: 0.5, color: '#ff78ae', unlocked: false },
+    blue:   { name: '🔵 藍鳥', price: 100,  desc: '高彈力跳躍', radius: 16, density: 0.003, restitution: 0.9, color: '#1e90ff', unlocked: false },
+    purple: { name: '🟣 紫鳥', price: 150,  desc: '超輕疾風速', radius: 15, density: 0.002, restitution: 0.8, color: '#a55eea', unlocked: false },
+    yellow: { name: '🟡 黃鳥', price: 250,  desc: '極速高彈力', radius: 18, density: 0.008, restitution: 0.7, color: '#eccc68', unlocked: false },
+    orange: { name: '🟠 橙鳥', price: 350,  desc: '中型衝擊力', radius: 22, density: 0.007, restitution: 0.5, color: '#ffa502', unlocked: false },
+    black:  { name: '⚫ 黑鳥', price: 500,  desc: '重型破壞型', radius: 24, density: 0.012, restitution: 0.2, color: '#2f3542', unlocked: false },
+    green:  { name: '🟢 綠鳥', price: 700,  desc: '巨型鎮壓型', radius: 30, density: 0.015, restitution: 0.3, color: '#2ed573', unlocked: false },
+    grey:   { name: '🩶 灰鳥', price: 850,  desc: '鋼鐵極高威', radius: 26, density: 0.020, restitution: 0.1, color: '#a4b0be', unlocked: false },
+    gold:   { name: '🟡 金鳥', price: 1000, desc: '傳奇高彈威', radius: 21, density: 0.010, restitution: 0.85, color: '#ffd700', unlocked: false }
+};
 
 const width = 1024;
 const height = 768;
@@ -105,12 +300,7 @@ function init() {
     render = Render.create({
         element: container,
         engine: engine,
-        options: {
-            width: width,
-            height: height,
-            wireframes: false,
-            background: 'transparent'
-        }
+        options: { width: width, height: height, wireframes: false, background: 'transparent' }
     });
 
     Render.run(render);
@@ -120,46 +310,80 @@ function init() {
     setupScene();
     setupMouse();
 
-    Events.on(engine, 'afterUpdate', checkBirdOutOfBounds);
+    Events.on(engine, 'afterUpdate', checkBirdStatus);
     Events.on(engine, 'collisionStart', handleCollisions);
 
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
+    renderShopItems();
+}
+
+function updateTheme() {
+    const themeIndex = Math.floor((currentLevel - 1) / 30) % themeMaps.length;
+    const currentTheme = themeMaps[themeIndex];
+
+    container.style.background = currentTheme.bg;
+    mapEl.innerText = currentTheme.name;
+
+    if (groundBody) {
+        groundBody.render.fillStyle = currentTheme.ground;
+    }
 }
 
 function setupScene() {
+    if (reloadedTimeout) clearTimeout(reloadedTimeout);
     Composite.clear(engine.world);
-    score = 0;
+    
+    // 計算該關卡限定的免費小鳥數量（基礎 3 隻，每增加 5 關增給 1 隻，上限 5 隻）
+    levelMaxBirds = Math.min(3 + Math.floor((currentLevel - 1) / 5), 5);
+    remainingBirds = levelMaxBirds;
+
+    levelEl.innerText = currentLevel;
+    birdsEl.innerText = remainingBirds;
     scoreEl.innerText = score;
+    coinsEl.innerText = coins;
+    msgModal.style.display = 'none';
     isLaunched = false;
 
-    // 地面 (不設左右與上方邊界牆，讓鳥可自由飛出邊界)
-    const ground = Bodies.rectangle(width / 2, height - 20, width * 2, 60, { 
+    // 建立地面
+    const themeIndex = Math.floor((currentLevel - 1) / 30) % themeMaps.length;
+    groundBody = Bodies.rectangle(width / 2, height - 20, width * 2, 60, { 
         isStatic: true, 
-        render: { fillStyle: '#2ed573' },
+        render: { fillStyle: themeMaps[themeIndex].ground },
         label: 'ground'
     });
-    Composite.add(engine.world, ground);
+    Composite.add(engine.world, groundBody);
 
-    // 彈弓底座
-    const base = Bodies.rectangle(slingshotPos.x, slingshotPos.y + 60, 20, 120, {
+    updateTheme();
+    createBirdHouse();
+    buildLevelStructure(currentLevel);
+    spawnBird();
+}
+
+function createBirdHouse() {
+    const slingshotBase = Bodies.rectangle(slingshotPos.x, slingshotPos.y + 60, 20, 120, {
         isStatic: true,
         render: { fillStyle: '#8B4513' },
         collisionFilter: { group: -1 }
     });
-    Composite.add(engine.world, base);
 
-    // 建立目標與小鳥
-    createTargets();
-    spawnBird();
+    const houseLeft = Bodies.rectangle(60, height - 90, 15, 80, { isStatic: true, render: { fillStyle: '#a75931' } });
+    const houseRight = Bodies.rectangle(120, height - 90, 15, 80, { isStatic: true, render: { fillStyle: '#a75931' } });
+    const houseRoof = Bodies.rectangle(90, height - 140, 90, 15, { isStatic: true, render: { fillStyle: '#5c2c16' } });
+
+    Composite.add(engine.world, [slingshotBase, houseLeft, houseRight, houseRoof]);
 }
 
 function spawnBird() {
-    bird = Bodies.circle(slingshotPos.x, slingshotPos.y, 20, {
-        density: 0.004,
+    if (remainingBirds <= 0) return;
+
+    const config = birdConfig[currentBirdType];
+    
+    bird = Bodies.circle(slingshotPos.x, slingshotPos.y, config.radius, {
+        density: config.density,
         frictionAir: 0.005,
-        restitution: 0.4,
-        render: { fillStyle: '#ff4757' },
+        restitution: config.restitution,
+        render: { fillStyle: config.color },
         label: 'bird'
     });
 
@@ -176,92 +400,296 @@ function spawnBird() {
     isLaunched = false;
 }
 
-function createTargets() {
-    const startX = 650;
-    const startY = height - 80;
+// 根據關卡數生成不重複的建築物與障礙
+function buildLevelStructure(lvl) {
+    const startX = 620;
+    let bodies = [];
+    pigCount = 0;
 
-    const blocks = [
-        Bodies.rectangle(startX, startY, 20, 100, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
-        Bodies.rectangle(startX + 120, startY, 20, 100, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
-        Bodies.rectangle(startX + 60, startY - 60, 140, 20, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
-        Bodies.rectangle(startX + 20, startY - 120, 20, 100, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
-        Bodies.rectangle(startX + 100, startY - 120, 20, 100, { render: { fillStyle: '#d2dae2' }, label: 'block' }),
-        Bodies.rectangle(startX + 60, startY - 180, 120, 20, { render: { fillStyle: '#d2dae2' }, label: 'block' })
-    ];
+    const layoutType = lvl % 4; // 4 種建築陣型循環微調
 
-    const pigs = [
-        Bodies.circle(startX + 60, startY, 22, { render: { fillStyle: '#2ed573' }, label: 'pig' }),
-        Bodies.circle(startX + 60, startY - 120, 22, { render: { fillStyle: '#2ed573' }, label: 'pig' })
-    ];
+    if (layoutType === 0) {
+        // 陣型 A：單高塔結構
+        const floors = Math.min(2 + Math.floor(lvl / 5), 5);
+        for (let f = 0; f < floors; f++) {
+            const y = (height - 50) - (f * 95);
+            bodies.push(Bodies.rectangle(startX, y - 40, 18, 80, { render: { fillStyle: '#d2dae2' }, label: 'block' }));
+            bodies.push(Bodies.rectangle(startX + 120, y - 40, 18, 80, { render: { fillStyle: '#d2dae2' }, label: 'block' }));
+            bodies.push(Bodies.rectangle(startX + 60, y - 85, 140, 18, { render: { fillStyle: '#d2dae2' }, label: 'block' }));
+            
+            bodies.push(Bodies.circle(startX + 60, y - 40, 20, { render: { fillStyle: '#2ed573' }, label: 'pig' }));
+            pigCount++;
+        }
+    } else if (layoutType === 1) {
+        // 陣型 B：雙平行塔結構
+        const heightLayers = Math.min(2 + Math.floor(lvl / 6), 4);
+        [startX - 40, startX + 120].forEach(xOffset => {
+            for (let f = 0; f < heightLayers; f++) {
+                const y = (height - 50) - (f * 85);
+                bodies.push(Bodies.rectangle(xOffset, y - 35, 16, 70, { render: { fillStyle: '#eccc68' }, label: 'block' }));
+                bodies.push(Bodies.rectangle(xOffset + 70, y - 35, 16, 70, { render: { fillStyle: '#eccc68' }, label: 'block' }));
+                bodies.push(Bodies.rectangle(xOffset + 35, y - 75, 90, 16, { render: { fillStyle: '#eccc68' }, label: 'block' }));
+                
+                bodies.push(Bodies.circle(xOffset + 35, y - 35, 18, { render: { fillStyle: '#2ed573' }, label: 'pig' }));
+                pigCount++;
+            }
+        });
+    } else if (layoutType === 2) {
+        // 陣型 C：金字塔城堡結構
+        for (let row = 0; row < 3; row++) {
+            for (let col = 0; col < (3 - row); col++) {
+                const x = startX + col * 75 + row * 38;
+                const y = (height - 50) - row * 85;
+                bodies.push(Bodies.rectangle(x, y - 35, 16, 70, { render: { fillStyle: '#70a1ff' }, label: 'block' }));
+                bodies.push(Bodies.rectangle(x + 50, y - 35, 16, 70, { render: { fillStyle: '#70a1ff' }, label: 'block' }));
+                bodies.push(Bodies.rectangle(x + 25, y - 75, 70, 16, { render: { fillStyle: '#70a1ff' }, label: 'block' }));
+                
+                if (Math.random() > 0.3 || row === 0) {
+                    bodies.push(Bodies.circle(x + 25, y - 35, 19, { render: { fillStyle: '#2ed573' }, label: 'pig' }));
+                    pigCount++;
+                }
+            }
+        }
+    } else {
+        // 陣型 D：防禦交錯壁壘 (含前方隨機障礙墩)
+        const wallX = startX + 50;
+        for (let f = 0; f < 3; f++) {
+            const y = (height - 50) - (f * 90);
+            bodies.push(Bodies.rectangle(wallX - 30, y - 40, 20, 80, { render: { fillStyle: '#ff6b81' }, label: 'block' }));
+            bodies.push(Bodies.rectangle(wallX + 90, y - 40, 20, 80, { render: { fillStyle: '#ff6b81' }, label: 'block' }));
+            bodies.push(Bodies.rectangle(wallX + 30, y - 85, 150, 20, { render: { fillStyle: '#ff6b81' }, label: 'block' }));
 
-    Composite.add(engine.world, [...blocks, ...pigs]);
+            bodies.push(Bodies.circle(wallX + 30, y - 40, 22, { render: { fillStyle: '#2ed573' }, label: 'pig' }));
+            pigCount++;
+        }
+        bodies.push(Bodies.rectangle(startX - 80, height - 60, 30, 100, { render: { fillStyle: '#747d8c' }, label: 'block' }));
+    }
+
+    Composite.add(engine.world, bodies);
 }
 
 function setupMouse() {
     const mouse = Mouse.create(render.canvas);
     mouseConstraint = MouseConstraint.create(engine, {
         mouse: mouse,
-        constraint: {
-            stiffness: 0.2,
-            render: { visible: false }
-        }
+        constraint: { stiffness: 0.2, render: { visible: false } }
     });
 
     Composite.add(engine.world, mouseConstraint);
     render.mouse = mouse;
 
     Events.on(mouseConstraint, 'enddrag', (event) => {
-        if (event.body === bird) {
+        if (event.body === bird && !isLaunched) {
             isLaunched = true;
-            setTimeout(() => {
-                slingshot.bodyB = null;
-            }, 60);
+            remainingBirds--;
+            birdsEl.innerText = remainingBirds;
+
+            setTimeout(() => { slingshot.bodyB = null; }, 60);
+
+            // 判斷飛行靜止或飛出邊界
+            if (reloadedTimeout) clearTimeout(reloadedTimeout);
+            reloadedTimeout = setTimeout(checkNextBirdOrGameover, 5000);
         }
     });
 }
 
-function checkBirdOutOfBounds() {
-    if (!bird) return;
-
+function checkBirdStatus() {
+    if (!bird || !isLaunched) return;
     const pos = bird.position;
-    // 小鳥飛出螢幕範圍邊界時，立刻重新生成新鳥
-    const isOutOfBounds = pos.x < -50 || pos.x > width + 50 || pos.y < -100 || pos.y > height + 50;
     
-    if (isLaunched && isOutOfBounds) {
-        reloadBird();
+    // 超出螢幕邊界，提早準備下一隻
+    if (pos.x < -50 || pos.x > width + 50 || pos.y < -100 || pos.y > height + 50) {
+        if (reloadedTimeout) clearTimeout(reloadedTimeout);
+        checkNextBirdOrGameover();
     }
 }
 
-function reloadBird() {
+function checkNextBirdOrGameover() {
+    if (pigCount <= 0) return; // 已勝利
+
     Composite.remove(engine.world, bird);
     slingshot.bodyB = null;
-    spawnBird();
+
+    if (remainingBirds > 0) {
+        spawnBird();
+    } else {
+        // 判定失敗
+        setTimeout(() => {
+            if (pigCount > 0) {
+                gameOver();
+            }
+        }, 1000);
+    }
 }
 
 function handleCollisions(event) {
     event.pairs.forEach(pair => {
         const { bodyA, bodyB } = pair;
         [bodyA, bodyB].forEach(body => {
-            if (body.label === 'pig' && body.speed > 3) {
+            if (body.label === 'pig' && body.speed > 2.8) {
                 Composite.remove(engine.world, body);
                 score += 100;
+                coins += 100;
                 scoreEl.innerText = score;
+                coinsEl.innerText = coins;
+                modalCoinsEl.innerText = coins;
+                pigCount--;
+
+                if (pigCount <= 0) {
+                    levelComplete();
+                }
             }
         });
     });
 }
 
-function resizeCanvas() {
-    const canvas = render.canvas;
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
+function levelComplete() {
+    if (reloadedTimeout) clearTimeout(reloadedTimeout);
+    coins += currentLevel * 50;
+    coinsEl.innerText = coins;
+    modalCoinsEl.innerText = coins;
+
+    const isNewMap = (currentLevel % 30 === 0);
+    let extraMsg = isNewMap ? `\n🎉 達成 30 關突破！下一關切換全新主題地圖！` : '';
     
-    canvas.style.width = `${containerWidth}px`;
-    canvas.style.height = `${containerHeight}px`;
+    msgText.innerText = `🎉 成功突破第 ${currentLevel} 關！\n獲得通關獎勵 +$${currentLevel * 50} 金幣${extraMsg}`;
+    modalActionBtn.innerText = "進入下一關 ➔";
+    modalActionBtn.className = "";
+    modalActionBtn.onclick = nextLevel;
+    msgModal.style.display = 'block';
 }
 
-function resetGame() {
+function gameOver() {
+    if (reloadedTimeout) clearTimeout(reloadedTimeout);
+    msgText.innerText = `💥 任務失敗！\n限定的小鳥已全部用盡，還有 ${pigCount} 隻綠豬存活。`;
+    modalActionBtn.innerText = "重新挑戰 🔄";
+    modalActionBtn.className = "retry-btn";
+    modalActionBtn.onclick = resetCurrentLevel;
+    msgModal.style.display = 'block';
+}
+
+function nextLevel() {
+    currentLevel++;
     setupScene();
+}
+
+function resetCurrentLevel() {
+    setupScene();
+}
+
+// 鳥店控制
+function renderShopItems() {
+    shopGrid.innerHTML = '';
+    Object.keys(birdConfig).forEach(key => {
+        const item = birdConfig[key];
+        const isSelected = key === currentBirdType;
+        
+        let statusText = isSelected ? '【裝備中】' : (item.unlocked ? '【已擁有】' : '🔒 未解鎖');
+        let priceText = item.unlocked ? item.desc : `💰 $${item.price}`;
+
+        const div = document.createElement('div');
+        div.className = `shop-item ${isSelected ? 'active' : ''} ${!item.unlocked ? 'locked' : ''}`;
+        div.onclick = () => selectOrBuyBird(key);
+        div.innerHTML = `
+            <div><strong>${item.name}</strong></div>
+            <div style="font-size: 10px; color:#ccc;">${statusText}</div>
+            <div class="price-tag">${priceText}</div>
+        `;
+        shopGrid.appendChild(div);
+    });
+}
+
+function selectOrBuyBird(key) {
+    const item = birdConfig[key];
+
+    if (item.unlocked) {
+        currentBirdType = key;
+        renderShopItems();
+        if (!isLaunched) {
+            Composite.remove(engine.world, bird);
+            spawnBird();
+        }
+    } else {
+        if (coins >= item.price) {
+            coins -= item.price;
+            item.unlocked = true;
+            currentBirdType = key;
+            coinsEl.innerText = coins;
+            modalCoinsEl.innerText = coins;
+            renderShopItems();
+            if (!isLaunched) {
+                Composite.remove(engine.world, bird);
+                spawnBird();
+            }
+            alert(`🎉 恭喜購買成功！已裝備 ${item.name}！`);
+        } else {
+            alert(`❌ 金幣不足！購買 ${item.name} 需要 $${item.price} 金幣。`);
+        }
+    }
+}
+
+function openShopModal() {
+    modalCoinsEl.innerText = coins;
+    document.getElementById('modal-title').innerText = '🏪 鳥店購物';
+    adminControls.style.display = 'none';
+    renderShopItems();
+    shopModal.style.display = 'block';
+}
+
+function openAdminAuth() {
+    if (isAdminAuthenticated) {
+        openAdminPanel();
+        return;
+    }
+
+    const inputPassword = prompt('請輸入管理員密碼進入後台：');
+    if (inputPassword === null) return;
+
+    if (inputPassword.trim() === ADMIN_PASSWORD) {
+        isAdminAuthenticated = true;
+        openAdminPanel();
+    } else {
+        alert('❌ 密碼錯誤，存取被拒絕！');
+    }
+}
+
+function openAdminPanel() {
+    modalCoinsEl.innerText = coins;
+    document.getElementById('modal-title').innerText = '👑 管理員後台控制';
+    adminControls.style.display = 'block';
+    renderShopItems();
+    shopModal.style.display = 'block';
+}
+
+function closeShopModal() {
+    shopModal.style.display = 'none';
+}
+
+function adminUnlockAll() {
+    Object.keys(birdConfig).forEach(key => { birdConfig[key].unlocked = true; });
+    renderShopItems();
+    alert('🔓 管理員權限：已免費解鎖所有小鳥！');
+}
+
+function adminSkip() {
+    const allBodies = Composite.allBodies(engine.world);
+    allBodies.forEach(body => {
+        if (body.label === 'pig') Composite.remove(engine.world, body);
+    });
+    score += pigCount * 100;
+    coins += pigCount * 150;
+    scoreEl.innerText = score;
+    coinsEl.innerText = coins;
+    modalCoinsEl.innerText = coins;
+    pigCount = 0;
+    closeShopModal();
+    levelComplete();
+}
+
+function resizeCanvas() {
+    const canvas = render.canvas;
+    canvas.style.width = `${container.clientWidth}px`;
+    canvas.style.height = `${container.clientHeight}px`;
 }
 
 window.onload = init;
