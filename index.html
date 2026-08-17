@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>憤怒鳥 - 觸控發射修復版</title>
+    <title>憤怒鳥 - 自由選關完整版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <style>
         * {
@@ -12,7 +12,7 @@
             padding: 0;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none; /* 禁用預設的螢幕滑動與縮放 */
+            touch-action: none;
         }
         body, html {
             width: 100%;
@@ -36,20 +36,22 @@
         canvas {
             width: 100% !important;
             height: 100% !important;
+            object-fit: contain; 
             display: block;
         }
+        
         #top-bar {
             position: absolute;
             top: 10px;
             left: 10px;
             right: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
             pointer-events: none;
             z-index: 10;
         }
         #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
             color: #fff;
             font-size: 15px;
             font-weight: bold;
@@ -66,22 +68,22 @@
         .birds-ui { color: #ff6b6b; font-size: 16px; }
         .coin-ui { color: #ffd700; }
         
-        #author {
-            position: absolute;
-            bottom: 10px;
-            left: 15px;
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 13px;
-            font-weight: bold;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
-            pointer-events: none;
-            z-index: 10;
-        }
         .btn-group {
+            position: absolute;
+            top: 0;
+            right: 0;
             display: flex;
             gap: 6px;
             pointer-events: auto;
         }
+        
+        @media (max-width: 650px) {
+            .btn-group {
+                flex-direction: column;
+                align-items: flex-end;
+            }
+        }
+
         .game-btn {
             padding: 6px 10px;
             font-size: 13px;
@@ -93,10 +95,23 @@
             box-shadow: 0 3px 5px rgba(0,0,0,0.3);
             touch-action: manipulation;
         }
+        #level-select-btn { background-color: #3742fa; }
         #shop-btn { background-color: #2ed573; }
         #reset-btn { background-color: #ff4757; }
         #admin-btn { background-color: #ffa502; }
         .game-btn:active { transform: scale(0.95); }
+        
+        #author {
+            position: absolute;
+            bottom: 10px;
+            left: 15px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            pointer-events: none;
+            z-index: 10;
+        }
         
         #msg-modal {
             display: none;
@@ -129,28 +144,69 @@
         }
         #msg-modal button.retry-btn { background: #ff4757; }
 
-        #shop-modal {
+        /* 通用彈窗樣式 */
+        .modal-popup {
             display: none;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 340px;
+            width: 360px;
             max-height: 85vh;
             overflow-y: auto;
             background: rgba(0, 0, 0, 0.95);
-            border: 2px solid #2ed573;
             border-radius: 12px;
             padding: 16px;
             color: white;
             z-index: 100;
             box-shadow: 0 8px 16px rgba(0,0,0,0.6);
         }
-        #shop-modal h3 {
+        #shop-modal { border: 2px solid #2ed573; }
+        #levels-modal { border: 2px solid #3742fa; }
+
+        .modal-popup h3 {
             text-align: center;
-            margin-bottom: 8px;
-            color: #2ed573;
+            margin-bottom: 12px;
         }
+        #shop-modal h3 { color: #2ed573; }
+        #levels-modal h3 { color: #70a1ff; }
+
+        /* 關卡選擇選單格線 */
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            max-height: 50vh;
+            overflow-y: auto;
+            padding: 5px;
+        }
+        .level-btn {
+            padding: 10px 0;
+            background: #2f3542;
+            border: 1px solid #57606f;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .level-btn.unlocked {
+            background: #1e90ff;
+            border-color: #70a1ff;
+        }
+        .level-btn.current {
+            background: #2ed573;
+            border-color: #55efc4;
+            box-shadow: 0 0 8px #2ed573;
+        }
+        .level-btn.locked {
+            background: #1e272e;
+            color: #747d8c;
+            cursor: not-allowed;
+            border-color: #2f3542;
+        }
+
         .shop-section h4 {
             margin-bottom: 8px;
             font-size: 13px;
@@ -217,9 +273,10 @@
             <div class="coin-ui">💰 金幣: <span id="coins">200</span></div>
         </div>
         <div class="btn-group">
+            <button id="level-select-btn" class="game-btn" onclick="openLevelsModal()">🗺️ 選關</button>
             <button id="shop-btn" class="game-btn" onclick="openShopModal()">🏪 鳥店</button>
             <button id="admin-btn" class="game-btn" onclick="openAdminAuth()">👑 後台</button>
-            <button id="reset-btn" class="game-btn" onclick="resetCurrentLevel()">重置</button>
+            <button id="reset-btn" class="game-btn" onclick="resetCurrentLevel()">重置關卡</button>
         </div>
     </div>
 
@@ -230,7 +287,8 @@
         <button id="modal-action-btn" onclick="nextLevel()">進入下一關 ➔</button>
     </div>
 
-    <div id="shop-modal">
+    <!-- 鳥店彈窗 -->
+    <div id="shop-modal" class="modal-popup">
         <h3 id="modal-title">🏪 鳥店購物</h3>
         <div class="shop-section">
             <h4>
@@ -245,6 +303,14 @@
             <button class="modal-btn back-btn" onclick="switchToNormalShop()">⬅️ 返回鳥店</button>
         </div>
         <button class="modal-btn close-btn" onclick="closeShopModal()">❌ 關閉</button>
+    </div>
+
+    <!-- 關卡選擇彈窗 -->
+    <div id="levels-modal" class="modal-popup">
+        <h3>🗺️ 選擇關卡</h3>
+        <p style="font-size: 12px; color: #aaa; text-align: center; margin-bottom: 10px;">最高紀錄關卡：<span id="max-level-display" style="color:#ffd700; font-weight:bold;">1</span></p>
+        <div class="level-grid" id="level-grid"></div>
+        <button class="modal-btn close-btn" onclick="closeLevelsModal()">❌ 關閉</button>
     </div>
 </div>
 
@@ -261,14 +327,20 @@ const modalCoinsEl = document.getElementById('modal-coins');
 const msgModal = document.getElementById('msg-modal');
 const msgText = document.getElementById('msg-text');
 const modalActionBtn = document.getElementById('modal-action-btn');
+
 const shopModal = document.getElementById('shop-modal');
 const shopGrid = document.getElementById('shop-grid');
 const adminControls = document.getElementById('admin-controls');
+
+const levelsModal = document.getElementById('levels-modal');
+const levelGrid = document.getElementById('level-grid');
+const maxLevelDisplay = document.getElementById('max-level-display');
 
 let engine, render, runner, mouseConstraint;
 let bird = null;
 let isDragging = false, isLaunched = false;
 let score = 0, coins = 200, currentLevel = 1, pigCount = 0;
+let maxUnlockedLevel = parseInt(localStorage.getItem('angry_birds_max_level') || '1');
 let remainingBirds = 0;
 let levelMaxBirds = 3;
 let groundBody = null;
@@ -400,7 +472,7 @@ function spawnBird() {
         restitution: config.restitution,
         render: { fillStyle: config.color },
         label: 'bird',
-        isStatic: true // 發射前為靜態，避免掉落
+        isStatic: true
     });
 
     Composite.add(engine.world, bird);
@@ -410,7 +482,6 @@ function spawnBird() {
 
 function setupMouseControls() {
     const mouse = Mouse.create(render.canvas);
-    // 適配高畫質手機螢幕解析度，確保觸控精準
     mouse.pixelRatio = window.devicePixelRatio || 1;
 
     mouseConstraint = MouseConstraint.create(engine, {
@@ -427,11 +498,18 @@ function setupMouseControls() {
         }
     });
 
-    // 關鍵修復：移除了 `event.body === bird` 的檢查，因為手機放開瞬間 event.body 可能判定為 null
     Events.on(mouseConstraint, 'enddrag', (event) => {
         if (isDragging) {
             isDragging = false;
-            launchBird();
+            
+            const delta = Vector.sub(slingshotPos, bird.position);
+            const distance = Vector.magnitude(delta);
+            
+            if (distance < 15) {
+                Body.setPosition(bird, slingshotPos);
+            } else {
+                launchBird();
+            }
         }
     });
 }
@@ -442,7 +520,6 @@ function handleEngineUpdate() {
         const delta = Vector.sub(mousePos, slingshotPos);
         const distance = Vector.magnitude(delta);
 
-        // 限制最大拉扯距離
         if (distance > maxStretch) {
             const clampedVector = Vector.mult(Vector.normalise(delta), maxStretch);
             Body.setPosition(bird, Vector.add(slingshotPos, clampedVector));
@@ -453,7 +530,6 @@ function handleEngineUpdate() {
 
     if (isLaunched && bird) {
         const pos = bird.position;
-        // 小鳥飛出邊界處理
         if (pos.x < -100 || pos.x > width + 100 || pos.y < -100 || pos.y > height + 50) {
             if (reloadedTimeout) clearTimeout(reloadedTimeout);
             checkNextBirdOrGameover();
@@ -469,10 +545,8 @@ function launchBird() {
     birdsEl.innerText = remainingBirds;
 
     const delta = Vector.sub(slingshotPos, bird.position);
-    // 增加一點發射力度基數，讓觸控玩起來更爽快
     const launchForce = 0.15;
 
-    // 解除靜態狀態並施加衝力
     Body.setStatic(bird, false);
     Body.applyImpulse(bird, bird.position, Vector.mult(delta, launchForce * bird.density * 100));
 
@@ -483,7 +557,6 @@ function launchBird() {
 function drawCustomSlingshotAndTrajectory() {
     const ctx = render.context;
 
-    // 繪製彈弓橡皮筋
     if (bird && !isLaunched) {
         ctx.save();
         ctx.strokeStyle = '#301c11';
@@ -496,7 +569,6 @@ function drawCustomSlingshotAndTrajectory() {
         ctx.restore();
     }
 
-    // 拉扯時繪製預測軌跡虛線
     if (isDragging && bird) {
         ctx.save();
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
@@ -505,7 +577,6 @@ function drawCustomSlingshotAndTrajectory() {
 
         const delta = Vector.sub(slingshotPos, bird.position);
         let simPos = { x: bird.position.x, y: bird.position.y };
-        // 預測虛線演算法配合發射力度調整
         let simVel = Vector.mult(delta, 0.28);
 
         ctx.beginPath();
@@ -513,7 +584,7 @@ function drawCustomSlingshotAndTrajectory() {
         for (let i = 0; i < 25; i++) {
             simPos.x += simVel.x;
             simPos.y += simVel.y;
-            simVel.y += 0.45; // 模擬重力
+            simVel.y += 0.45;
             ctx.lineTo(simPos.x, simPos.y);
         }
         ctx.stroke();
@@ -622,6 +693,12 @@ function levelComplete() {
     coinsEl.innerText = coins;
     modalCoinsEl.innerText = coins;
 
+    // 更新最高關卡紀錄
+    if (currentLevel + 1 > maxUnlockedLevel) {
+        maxUnlockedLevel = currentLevel + 1;
+        localStorage.setItem('angry_birds_max_level', maxUnlockedLevel);
+    }
+
     const isNewMap = (currentLevel % 30 === 0);
     let extraMsg = isNewMap ? `\n🎉 達成 30 關突破！下一關切換全新主題地圖！` : '';
     
@@ -650,6 +727,49 @@ function resetCurrentLevel() {
     setupScene();
 }
 
+/* 關卡選擇選單邏輯 */
+function openLevelsModal() {
+    maxLevelDisplay.innerText = maxUnlockedLevel;
+    renderLevelGrid();
+    levelsModal.style.display = 'block';
+}
+
+function closeLevelsModal() {
+    levelsModal.style.display = 'none';
+}
+
+function renderLevelGrid() {
+    levelGrid.innerHTML = '';
+    // 展示到當前已解鎖關卡 + 5 關
+    const totalLevelsToShow = Math.max(maxUnlockedLevel + 3, 15);
+    
+    for (let i = 1; i <= totalLevelsToShow; i++) {
+        const btn = document.createElement('div');
+        const isUnlocked = i <= maxUnlockedLevel;
+        const isCurrent = i === currentLevel;
+
+        let statusClass = 'locked';
+        if (isCurrent) statusClass = 'current';
+        else if (isUnlocked) statusClass = 'unlocked';
+
+        btn.className = `level-btn ${statusClass}`;
+        btn.innerText = isUnlocked ? i : '🔒';
+        
+        if (isUnlocked) {
+            btn.onclick = () => selectLevel(i);
+        }
+
+        levelGrid.appendChild(btn);
+    }
+}
+
+function selectLevel(lvl) {
+    currentLevel = lvl;
+    closeLevelsModal();
+    setupScene();
+}
+
+/* 鳥店與管理員邏輯 */
 function renderShopItems() {
     shopGrid.innerHTML = '';
     Object.keys(birdConfig).forEach(key => {
